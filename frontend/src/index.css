@@ -146,7 +146,6 @@ body {
 /* Watermark footer */
 .mm-watermark {
   position: relative;
-  pointer-events: none;
 }
 .mm-watermark::after {
   content: "Produto de uso exclusivo da MM Confeitaria e Eventos";
@@ -163,6 +162,7 @@ body {
   z-index: 50;
   background: linear-gradient(180deg, transparent, rgba(250,246,242,0.9));
   padding: 8px;
+  pointer-events: none;
 }
 
 .mm-input {
