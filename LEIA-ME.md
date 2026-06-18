@@ -61,7 +61,37 @@ npm install -g yarn
 
 Todos os dados (cadastros, pedidos, fichas técnicas) ficam **dentro do MongoDB no seu próprio notebook**. Nada vai pra internet. ☁️❌
 
-**Recomendação**: faça backup do MongoDB de vez em quando, especialmente antes de formatar o PC.
+---
+
+## 🛡️ Backup e Restauração (MUITO IMPORTANTE!)
+
+### 📦 Para fazer BACKUP dos dados:
+1. **Dois cliques em `backup.bat`**
+2. Vai gerar um arquivo `.zip` na pasta `backups/` com a data e hora
+3. **Copie esse .zip para o OneDrive / Google Drive / Pen Drive** para guardar seguro
+
+⚠️ **Você precisa instalar uma vez as "MongoDB Database Tools"**:
+- Baixe em: https://www.mongodb.com/try/download/database-tools
+- Escolha Windows e baixe o MSI
+- Instale normalmente (next, next, finish)
+
+**Dica**: faça backup pelo menos 1 vez por semana, e sempre antes de formatar o PC ou trocar de máquina.
+
+### ♻️ Para RESTAURAR um backup:
+1. **Dois cliques em `restaurar.bat`**
+2. Confirme que deseja substituir os dados
+3. Selecione o arquivo `.zip` do backup desejado
+4. Pronto! Os dados são restaurados
+
+⚠️ **Atenção**: a restauração apaga os dados atuais e coloca os do backup no lugar. Use com cuidado!
+
+### 🔄 Levando seus dados pra outro PC:
+1. No PC antigo: rode `backup.bat` → gera o .zip
+2. Copie o .zip pro novo PC (pen drive, e-mail, drive)
+3. No PC novo: instale tudo normalmente (Python, Node, MongoDB, Mongo Tools)
+4. Rode `instalar.bat`
+5. Rode `restaurar.bat` e escolha o .zip
+6. Use normalmente com todos seus dados!
 
 ---
 
