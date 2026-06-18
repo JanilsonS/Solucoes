@@ -1,0 +1,37 @@
+{
+  "summary": "Backend: 8/8 pytest cases passed covering auth, dashboard, CRUDs (MP, Equip, Custos, Produtos, Markup), Ficha Técnica, Tabela de Preço, Pedidos and DRE with persistence checks. Frontend: Login works (via form submit), dashboard renders KPIs/charts. CRITICAL data-testid mismatches between request and code, and nav clicks not navigating.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Sidebar", "issue": "Sidebar nav clicks do not change URL (stays at /dashboard) - React Router navigation appears broken via testid clicks", "selector": "[data-testid^=nav-]", "priority": "HIGH"},
+      {"component": "Login", "issue": "Login submit button click did not trigger submission on first attempt (Enter on password worked). May be timing/loader related but worth verifying", "selector": "[data-testid='login-submit-btn']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Pedidos novo", "issue": "data-testid 'pedidos-novo-btn' NOT FOUND on Pedidos page", "affected_selectors": ["[data-testid='pedidos-novo-btn']"]}
+    ],
+    "design_issues": [
+      {"screen": "Sidebar testids", "issues": ["Request specified nav-materia-prima, nav-equipamentos, nav-ficha-tecnica, nav-tabela-preco but actual code uses nav-mp, nav-eq, nav-ficha, nav-tabela. Inconsistency between Layout.jsx and spec"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_mm_confeitaria.py", "/app/test_reports/pytest/results.xml"],
+  "action_items": [
+    "Align sidebar nav data-testids: rename to nav-materia-prima, nav-equipamentos, nav-ficha-tecnica, nav-tabela-preco (or update spec). Currently uses nav-mp/nav-eq/nav-ficha/nav-tabela.",
+    "Investigate why clicking sidebar items does not navigate to the corresponding route (URL remains /dashboard). Verify <Link>/useNavigate wiring in Layout.jsx.",
+    "Add data-testid='pedidos-novo-btn' to the 'Novo Pedido' button on Pedidos page.",
+    "Verify login submit button onClick triggers handleSubmit (may need type='submit' or rely on form onSubmit which currently works only via Enter on first attempt)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 838 lines - consider splitting into modules (auth, cadastros, ficha, pedidos, dre) for maintainability (>700 lines threshold).",
+    "DRE date filter uses ISO string comparison on created_at which is stored as ISO string - works but lexicographic; ensure all created_at are timezone-aware ISO.",
+    "Faturamento_6m uses timedelta(days=i*30) which is imprecise for month boundaries - can produce duplicate/missing months.",
+    "delete_produto removes ficha but not the produto's references in pedidos (already guarded). OK.",
+    "Markup descricao is unique globally across INDICE+LUCRO groups - might cause conflicts if same name used in both groups."
+  ],
+  "updated_files": ["/app/backend/tests/test_mm_confeitaria.py"],
+  "success_rate": {"backend": "100%", "frontend": "60%"},
+  "test_credentials": "admin@mm.com / mm123456 (verified working)",
+  "seed_data_creation": "Tests create and clean up TEST_ prefixed data automatically",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully validated (8 pytest cases). Frontend: sidebar nav testids in code are nav-mp/nav-eq/nav-ficha/nav-tabela (NOT nav-materia-prima/etc). Sidebar click does not change URL - needs investigation by main agent. pedidos-novo-btn missing. Login works using Enter key submit; first click attempt didn't redirect within 3s wait."
+}
