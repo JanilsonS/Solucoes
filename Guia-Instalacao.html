@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>MM Confeitaria - Guia de Instalação</title>
+<style>
+  @page { size: A4; margin: 12mm; }
+  @media print {
+    body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    .no-print { display: none; }
+    .page { page-break-after: always; }
+    .page:last-child { page-break-after: auto; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    color: #3D2817;
+    background: #FAF6F2;
+    margin: 0;
+    padding: 24px;
+    line-height: 1.55;
+  }
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    border-bottom: 3px solid #C49080;
+    padding-bottom: 16px;
+    margin-bottom: 24px;
+  }
+  .header img { height: 80px; }
+  h1 {
+    margin: 0;
+    color: #8B5E48;
+    font-size: 26px;
+    letter-spacing: 0.02em;
+  }
+  .sub { color: #B47B6B; font-style: italic; font-size: 14px; }
+  h2 {
+    color: #5B3A26;
+    border-left: 5px solid #C8A47A;
+    padding-left: 12px;
+    margin-top: 28px;
+    font-size: 18px;
+  }
+  h3 { color: #8B5E48; font-size: 15px; margin-bottom: 6px; }
+  .step {
+    background: #fff;
+    border: 1px solid #E8DDD3;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 6px rgba(61,40,23,0.05);
+  }
+  .step-num {
+    display: inline-block;
+    background: linear-gradient(145deg, #c9967e, #a06b56);
+    color: white;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 28px;
+    font-weight: bold;
+    margin-right: 8px;
+  }
+  code, .url {
+    background: #F5EBE0;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-family: 'Courier New', monospace;
+    color: #5B3A26;
+    font-size: 13px;
+  }
+  .warning {
+    background: #FFF4E5;
+    border-left: 4px solid #D49A5C;
+    padding: 10px 14px;
+    margin: 10px 0;
+    border-radius: 5px;
+    font-size: 13px;
+  }
+  .success {
+    background: #E8F0DD;
+    border-left: 4px solid #6B8E5A;
+    padding: 10px 14px;
+    margin: 10px 0;
+    border-radius: 5px;
+    font-size: 13px;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
+  th { background: #8B5E48; color: white; padding: 8px; text-align: left; }
+  td { padding: 7px 8px; border-bottom: 1px solid #E8DDD3; }
+  tr:nth-child(even) td { background: #F5EBE0; }
+  ul, ol { padding-left: 22px; }
+  ul li, ol li { margin-bottom: 4px; }
+  .footer {
+    text-align: center;
+    font-style: italic;
+    font-size: 12px;
+    color: #B47B6B;
+    margin-top: 30px;
+    padding-top: 14px;
+    border-top: 2px solid #E8DDD3;
+  }
+  .print-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(145deg, #c9967e, #a06b56);
+    color: white;
+    border: none;
+    padding: 12px 22px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 6px 0 #6e4733, 0 10px 20px rgba(110,71,51,0.3);
+  }
+  .check-cmd {
+    background: #2A1A0D;
+    color: #C8A47A;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    margin: 8px 0;
+  }
+</style>
+</head>
+<body>
+<button class="print-btn no-print" onclick="window.print()">🖨️ Imprimir / Salvar como PDF</button>
+
+<div class="page">
+  <div class="header">
+    <img src="https://customer-assets.emergentagent.com/job_confeitaria-py/artifacts/1g5frcrf_image.png" alt="MM">
+    <div>
+      <h1>MM Confeitaria & Eventos</h1>
+      <div class="sub">Guia de Instalação no Notebook — Windows</div>
+    </div>
+  </div>
+
+  <h2>📋 Resumo: 5 programas para instalar (UMA VEZ no PC)</h2>
+  <table>
+    <thead><tr><th>#</th><th>Programa</th><th>Como instalar</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><b>Python 3.11+</b></td><td>Baixa do site → dois cliques → marca "Add to PATH"</td></tr>
+      <tr><td>2</td><td><b>Node.js (LTS)</b></td><td>Baixa do site → dois cliques → Next, Install</td></tr>
+      <tr><td>3</td><td><b>MongoDB Community</b></td><td>Baixa do site → marca "Install as Service"</td></tr>
+      <tr><td>4</td><td><b>MongoDB Database Tools</b></td><td>Baixa do site → Next, Install (para backup)</td></tr>
+      <tr><td>5</td><td><b>Yarn</b></td><td>No CMD: <code>npm install -g yarn</code></td></tr>
+    </tbody>
+  </table>
+
+  <div class="warning">
+    ⚠️ <b>Os 4 primeiros programas são instalados de qualquer pasta</b> — você só dá dois cliques no instalador baixado. O <b>Yarn</b> (item 5) é o único que usa o CMD, e o comando funciona de qualquer pasta também.
+  </div>
+
+  <h2>🐍 1. Python</h2>
+  <div class="step">
+    <span class="step-num">1</span> Abra: <span class="url">https://www.python.org/downloads/</span><br>
+    <span class="step-num">2</span> Clique em <b>"Download Python 3.x"</b> (botão amarelo)<br>
+    <span class="step-num">3</span> Dois cliques no arquivo <code>.exe</code> baixado<br>
+    <span class="step-num">4</span> <b style="color:#B85450;">⚠️ MUITO IMPORTANTE: marque a caixa "Add Python to PATH"</b><br>
+    <span class="step-num">5</span> Clique em <b>"Install Now"</b> e aguarde
+  </div>
+
+  <h2>🟢 2. Node.js</h2>
+  <div class="step">
+    <span class="step-num">1</span> Abra: <span class="url">https://nodejs.org/</span><br>
+    <span class="step-num">2</span> Clique no botão verde <b>"LTS"</b><br>
+    <span class="step-num">3</span> Dois cliques no arquivo <code>.msi</code> baixado<br>
+    <span class="step-num">4</span> Next → Next → Install (não precisa marcar nada extra)
+  </div>
+
+  <h2>🍃 3. MongoDB Community</h2>
+  <div class="step">
+    <span class="step-num">1</span> Abra: <span class="url">https://www.mongodb.com/try/download/community</span><br>
+    <span class="step-num">2</span> Escolha: <b>Current version</b>, <b>Windows</b>, <b>MSI</b> → clique "Download"<br>
+    <span class="step-num">3</span> Dois cliques no arquivo baixado<br>
+    <span class="step-num">4</span> Escolha <b>"Complete"</b><br>
+    <span class="step-num">5</span> <b style="color:#B85450;">⚠️ Marque "Install MongoDB as a Service"</b><br>
+    <span class="step-num">6</span> Install
+  </div>
+</div>
+
+<div class="page">
+  <div class="header">
+    <img src="https://customer-assets.emergentagent.com/job_confeitaria-py/artifacts/1g5frcrf_image.png" alt="MM">
+    <div>
+      <h1>MM Confeitaria & Eventos</h1>
+      <div class="sub">Guia de Instalação — Página 2</div>
+    </div>
+  </div>
+
+  <h2>🛠️ 4. MongoDB Database Tools (para backup)</h2>
+  <div class="step">
+    <span class="step-num">1</span> Abra: <span class="url">https://www.mongodb.com/try/download/database-tools</span><br>
+    <span class="step-num">2</span> Escolha: <b>Windows</b>, <b>MSI</b> → Download<br>
+    <span class="step-num">3</span> Dois cliques no arquivo → Next → Install
+  </div>
+
+  <h2>⌨️ 5. Yarn (no CMD)</h2>
+  <div class="step">
+    <span class="step-num">1</span> Aperte <b>Windows + R</b> → digite <code>cmd</code> → Enter<br>
+    <span class="step-num">2</span> Cole este comando e aperte Enter:<br>
+    <div class="check-cmd">npm install -g yarn</div>
+    <span class="step-num">3</span> Aguarde aparecer "success"
+  </div>
+
+  <h2>✅ Verificar se tudo deu certo</h2>
+  <p>Reinicie o PC. Depois abra o CMD e digite cada comando abaixo (um por vez):</p>
+  <div class="check-cmd">
+    python --version<br>
+    node --version<br>
+    yarn --version<br>
+    mongod --version
+  </div>
+  <div class="success">
+    ✅ Se cada um responder com um número de versão (ex: <code>Python 3.12.0</code>), está tudo instalado certo!
+  </div>
+
+  <h2>📁 Onde colocar a pasta do sistema?</h2>
+  <div class="step">
+    <b>Recomendado:</b> <code>C:\MM-Confeitaria\</code><br><br>
+    <b>Evite:</b> pastas dentro do OneDrive ou Google Drive (sincronização atrapalha)
+  </div>
+
+  <h2>🚀 Rodando o sistema</h2>
+  <table>
+    <thead><tr><th>Ação</th><th>Como fazer</th></tr></thead>
+    <tbody>
+      <tr><td><b>Instalar o sistema</b> (1 vez)</td><td>Dois cliques em <code>instalar.bat</code> — aguarda 5-10 min</td></tr>
+      <tr><td><b>Usar o sistema</b> (dia a dia)</td><td>Dois cliques em <code>iniciar.bat</code> — abre no navegador</td></tr>
+      <tr><td><b>Fazer backup</b> (semanal)</td><td>Dois cliques em <code>backup.bat</code> — gera .zip</td></tr>
+      <tr><td><b>Restaurar backup</b></td><td>Dois cliques em <code>restaurar.bat</code> — escolhe o .zip</td></tr>
+    </tbody>
+  </table>
+
+  <h2>🔐 Login padrão</h2>
+  <div class="step">
+    <b>Email:</b> admin@mm.com<br>
+    <b>Senha:</b> mm123456
+  </div>
+
+  <h2>❓ Problemas comuns</h2>
+  <table>
+    <thead><tr><th>Problema</th><th>Solução</th></tr></thead>
+    <tbody>
+      <tr><td>"python não é reconhecido"</td><td>Desinstale e reinstale Python marcando <b>"Add to PATH"</b></td></tr>
+      <tr><td>"yarn não é reconhecido"</td><td>Rode <code>npm install -g yarn</code> no cmd como administrador</td></tr>
+      <tr><td>MongoDB não conecta</td><td>Reinicie o PC (o serviço inicia sozinho)</td></tr>
+      <tr><td>Página não abre</td><td>Aguarde 30 seg após o <code>iniciar.bat</code>, depois recarregue</td></tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Produto de uso exclusivo da MM Confeitaria e Eventos
+  </div>
+</div>
+
+</body>
+</html>
