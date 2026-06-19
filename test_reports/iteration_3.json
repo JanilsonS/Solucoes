@@ -1,0 +1,33 @@
+{
+  "summary": "FASE 2 e2e validation: Pedidos detalhado/DRE, Controle de Produção, Ficha Detalhada Cósmica. Backend: 8/8 pytest passed. Frontend was initially broken with a runtime crash ('ControleProducao is not defined') because App.js was missing imports for the two new pages. Fixed the import in /app/frontend/src/App.js and all flows then worked: login, Pedidos modal with cliente-select auto-fill (Cliente Teste/Rua A, 100), data/hora entrega, add-produto populates DRE (Receita R$10,06, Resultado R$1,64), save closes modal; /producao shows consolidado (prod-consol-PD001) + ordens (prod-ordem-2, prod-ordem-3) with Cliente Teste and Pipoca; Ficha Detalhada loads 18 products, cosmic-sheet renders initially, edit form + upload + save (toast 'Ficha detalhada salva!') all work.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js (Routes)", "issue": "FIXED by testing agent. Missing imports for ControleProducao and FichaDetalhada caused 'ReferenceError: ControleProducao is not defined' Uncaught runtime error blocking the entire app on every route. Added imports at top of App.js.", "selector": "App.js lines 16-17", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Ficha Detalhada — toggle Editar/Visualizar", "issues": ["After Salvar in edit mode, clicking detalhe-toggle-edit does not return to Visualizar (cosmic-sheet stays hidden, form stays open). Likely the save handler implicitly resets edit state, so the next toggle re-enters edit. Minor UX confusion; consider keeping the user in the same mode after save OR keep button label deterministic."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_fase2.py", "/app/test_reports/pytest/fase2_results.xml"],
+  "action_items": [
+    "(Already fixed by testing agent) Keep the two new imports in /app/frontend/src/App.js — verify build/lint passes.",
+    "Minor: stabilize Visualizar/Editar toggle behavior after Salvar in FichaDetalhada (cosmic-sheet does not return on next toggle click).",
+    "Carry over from iteration_2: still recommend hardening global axios error handler so a 422 detail object never reaches React as a child (toast.error must always receive a string)."
+  ],
+  "critical_code_review_comments": [
+    "App.js was missing two imports for the new pages (ControleProducao, FichaDetalhada). This was a P0 build/regression bug: every route crashed because the component referenced in <Route element=...> was undefined. A render smoke test for every route would have caught this.",
+    "FichaDetalhada.jsx: detalhe-toggle-edit button uses same testid for both 'Editar' and 'Visualizar' states. Consider splitting into two testids or keeping a single one but exposing aria-pressed state to ease testing and reasoning.",
+    "Pedidos.jsx: addItemFromTabela correctly uses preco_tabela_individual (verified: selecting PD001 gave Receita R$10,06 = preço da tabela individual). DRE panel updates live and matches backend math.",
+    "Backend compute_pedido_dre: uses ficha total_custo * quantidade — correct only if ficha represents cost per produced unit. For products with peso_total > 1 (recipe batches) this overstates custo_produtos. Worth a follow-up review (not part of this iteration scope)."
+  ],
+  "updated_files": ["/app/frontend/src/App.js", "/app/backend/tests/test_fase2.py"],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "test_credentials": "admin@mm.com / mm123456 (verified)",
+  "seed_data_creation": "None. Used existing 18 produtos, existing clientes (Cliente Teste, Rua A 100), existing approved order #2 and order #3.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "FASE 2 features verified end-to-end after fixing missing imports in App.js. Backend tests at /app/backend/tests/test_fase2.py (8 tests, all green) validate /api/producao, /api/pedidos/{id}.dre, /api/tabela-precos.preco_tabela_individual, /api/clientes.endereco, /api/produtos/{id}/detalhes (GET+PUT), /api/upload + /api/files/{path}?auth=. Frontend Playwright verified: login (use press_sequentially), /pedidos modal with cliente-select auto-fill + DRE live calc + save, /producao page with prod-consol-<codigo> + prod-ordem-<numero> + Cliente Teste/Pipoca visible, /ficha-detalhada select product → cosmic-sheet → toggle edit → form → save (toast). One minor remaining UX nit in FichaDetalhada toggle behavior after save (see design_issues).",
+  "rca of the issue": "Root cause of frontend crash: /app/frontend/src/App.js declared <Route path=\"producao\" element={<ControleProducao />}/> and <Route path=\"ficha-detalhada\" element={<FichaDetalhada />}/> but never imported those modules at the top of the file. Even though the route is only rendered when navigated to, React/CRA evaluates the JSX during App render so the undefined identifier throws a ReferenceError that the error overlay shows on every page (App crashes before the matched route is decided). Fix: added `import ControleProducao from '@/pages/ControleProducao'` and `import FichaDetalhada from '@/pages/FichaDetalhada'` at lines 17-18 of App.js. Verified post-fix by reloading and exercising all three new flows via Playwright."
+}

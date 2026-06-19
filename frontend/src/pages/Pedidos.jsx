@@ -9,25 +9,33 @@ const STATUS_PROD = ["PENDENTE", "EM_PRODUCAO", "ENTREGUE"];
 const STATUS_PAG = ["ABERTO", "PAGO"];
 
 const novoPedido = () => ({
-  cliente_nome: "", cliente_telefone: "", forma_pagamento: "",
+  cliente_id: null, cliente_nome: "", cliente_telefone: "", cliente_endereco: "", forma_pagamento: "",
   aprovacao: "PENDENTE", producao: "PENDENTE", pagamento: "ABERTO",
-  desconto_pct: 0, itens: [], receita_comercial: [], observacoes: "", data_evento: "",
+  desconto_pct: 0, itens: [], receita_comercial: [], observacoes: "",
+  data_evento: "", data_entrega: "", hora_entrega: "",
 });
 
 export default function Pedidos() {
   const [pedidos, setPedidos] = useState([]);
   const [tabela, setTabela] = useState(null);
+  const [clientes, setClientes] = useState([]);
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [filters, setFilters] = useState({ aprovacao: "", producao: "", pagamento: "", cliente: "" });
 
   const load = async () => {
-    const [{ data: p }, { data: t }] = await Promise.all([api.get("/pedidos"), api.get("/tabela-precos")]);
-    setPedidos(p); setTabela(t);
+    const [{ data: p }, { data: t }, { data: c }] = await Promise.all([api.get("/pedidos"), api.get("/tabela-precos"), api.get("/clientes")]);
+    setPedidos(p); setTabela(t); setClientes(c);
   };
   useEffect(() => { load(); }, []);
 
   const startNew = () => { setEditing(novoPedido()); setShowForm(true); };
+
+  const selectCliente = (id) => {
+    if (!id) { setEditing({ ...editing, cliente_id: null }); return; }
+    const c = clientes.find((x) => x.id === id);
+    if (c) setEditing({ ...editing, cliente_id: c.id, cliente_nome: c.nome, cliente_telefone: c.telefone, cliente_endereco: c.endereco || "" });
+  };
 
   const openEdit = async (id) => {
     const { data } = await api.get(`/pedidos/${id}`);
@@ -38,8 +46,8 @@ export default function Pedidos() {
   const addItemFromTabela = (produto_id) => {
     const row = tabela.rows.find((r) => r.produto_id === produto_id);
     if (!row) return;
-    const preco = row.precos_finais[0]?.preco || 0;
-    setEditing({ ...editing, itens: [...editing.itens, { produto_id, codigo: row.codigo, descricao: row.descricao, unidade: row.unidade, quantidade: 1, preco_unitario: preco, margem_lucro_pct: row.precos_finais[0]?.lucro_pct || 0 }] });
+    const preco = row.preco_tabela_individual || 0;
+    setEditing({ ...editing, itens: [...editing.itens, { produto_id, codigo: row.codigo, descricao: row.descricao, unidade: row.unidade, quantidade: 1, preco_unitario: preco, margem_lucro_pct: row.lucro_pct_individual || 0 }] });
   };
 
   const updateItem = (idx, field, value) => {
@@ -63,6 +71,20 @@ export default function Pedidos() {
     const rc = (editing?.receita_comercial || []).reduce((s, r) => s + Number(r.valor || 0), 0);
     const desc = (sub + rc) * (Number(editing?.desconto_pct || 0) / 100);
     return { sub, rc, desc, total: sub + rc - desc };
+  };
+
+  const calcDRE = () => {
+    const t = calcTotals();
+    const receitaTotal = t.total;
+    const indicesPct = tabela?.total_indices_pct || 0;
+    const deducoes = receitaTotal * (indicesPct / 100);
+    const custoProdutos = (editing?.itens || []).reduce((s, i) => {
+      const row = tabela?.rows.find((r) => r.produto_id === i.produto_id);
+      return s + (row?.custo_producao || 0) * i.quantidade;
+    }, 0);
+    const resultado = receitaTotal - deducoes - custoProdutos;
+    const margem = receitaTotal ? (resultado / receitaTotal) * 100 : 0;
+    return { receitaTotal, indicesPct, deducoes, custoProdutos, resultado, margem };
   };
 
   const save = async () => {
@@ -121,6 +143,7 @@ export default function Pedidos() {
   };
 
   const totals = editing ? calcTotals() : null;
+  const dre = editing ? calcDRE() : null;
 
   return (
     <div className="space-y-5">
@@ -177,14 +200,29 @@ export default function Pedidos() {
               <button onClick={() => { setShowForm(false); setEditing(null); }} className="text-[#8B5E48]"><X size={24}/></button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-              <div><label className="mm-label">Nome Cliente</label><input data-testid="ped-cliente-nome" className="mm-input" value={editing.cliente_nome} onChange={(e) => setEditing({ ...editing, cliente_nome: e.target.value })} /></div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
+              <div className="md:col-span-1">
+                <label className="mm-label">Cliente Cadastrado</label>
+                <select data-testid="ped-cliente-select" className="mm-input" value={editing.cliente_id || ""} onChange={(e) => selectCliente(e.target.value)}>
+                  <option value="">— Novo / digitar abaixo —</option>
+                  {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome} • {c.telefone}</option>)}
+                </select>
+              </div>
+              <div><label className="mm-label">Nome Cliente</label><input data-testid="ped-cliente-nome" className="mm-input" value={editing.cliente_nome} onChange={(e) => setEditing({ ...editing, cliente_nome: e.target.value, cliente_id: null })} /></div>
               <div><label className="mm-label">Fone/Whats</label><input data-testid="ped-cliente-fone" className="mm-input" value={editing.cliente_telefone} onChange={(e) => setEditing({ ...editing, cliente_telefone: e.target.value })} /></div>
+            </div>
+            <div className="mb-4">
+              <label className="mm-label">Endereço de Entrega</label>
+              <input data-testid="ped-cliente-endereco" className="mm-input" value={editing.cliente_endereco || ""} onChange={(e) => setEditing({ ...editing, cliente_endereco: e.target.value })} placeholder="Rua, número, bairro, cidade" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
               <div><label className="mm-label">Forma Pagamento</label><input className="mm-input" value={editing.forma_pagamento} onChange={(e) => setEditing({ ...editing, forma_pagamento: e.target.value })} placeholder="PIX, Cartão..." /></div>
+              <div><label className="mm-label">Data de Entrega</label><input data-testid="ped-data-entrega" type="date" className="mm-input" value={editing.data_entrega || ""} onChange={(e) => setEditing({ ...editing, data_entrega: e.target.value })} /></div>
+              <div><label className="mm-label">Hora de Entrega</label><input data-testid="ped-hora-entrega" type="time" className="mm-input" value={editing.hora_entrega || ""} onChange={(e) => setEditing({ ...editing, hora_entrega: e.target.value })} /></div>
               <div><label className="mm-label">Aprovação</label><select className="mm-input" value={editing.aprovacao} onChange={(e) => setEditing({ ...editing, aprovacao: e.target.value })}>{STATUS_APR.map((s) => <option key={s}>{s}</option>)}</select></div>
               <div><label className="mm-label">Produção</label><select className="mm-input" value={editing.producao} onChange={(e) => setEditing({ ...editing, producao: e.target.value })}>{STATUS_PROD.map((s) => <option key={s}>{s}</option>)}</select></div>
               <div><label className="mm-label">Pagamento</label><select className="mm-input" value={editing.pagamento} onChange={(e) => setEditing({ ...editing, pagamento: e.target.value })}>{STATUS_PAG.map((s) => <option key={s}>{s}</option>)}</select></div>
-              <div><label className="mm-label">Data do Evento</label><input type="date" className="mm-input" value={editing.data_evento || ""} onChange={(e) => setEditing({ ...editing, data_evento: e.target.value })} /></div>
               <div><label className="mm-label">Desconto (%)</label><input type="number" step="0.01" className="mm-input" value={editing.desconto_pct} onChange={(e) => setEditing({ ...editing, desconto_pct: e.target.value })} /></div>
             </div>
 
@@ -229,6 +267,17 @@ export default function Pedidos() {
               <div>Receita Comercial: <strong>{fmtMoney(totals.rc)}</strong></div>
               <div>Desconto ({fmtBR(editing.desconto_pct || 0)}%): <strong>-{fmtMoney(totals.desc)}</strong></div>
               <div className="text-xl text-[#6B8E5A]"><strong>TOTAL: {fmtMoney(totals.total)}</strong></div>
+            </div>
+
+            <div className="mt-3 p-4 rounded-xl bg-[#3D2817] text-white" data-testid="ped-dre-panel">
+              <h3 className="font-display text-lg mb-2 text-[#E8C9A0]">DRE do Pedido</h3>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                <div><div className="text-[#C8A47A] text-xs uppercase">Receita Total</div><div className="font-bold" data-testid="ped-dre-receita">{fmtMoney(dre.receitaTotal)}</div></div>
+                <div><div className="text-[#C8A47A] text-xs uppercase">Deduções ({fmtBR(dre.indicesPct)}%)</div><div className="font-bold text-[#E8A0A0]">-{fmtMoney(dre.deducoes)}</div></div>
+                <div><div className="text-[#C8A47A] text-xs uppercase">Custo Produtos</div><div className="font-bold text-[#E8A0A0]">-{fmtMoney(dre.custoProdutos)}</div></div>
+                <div><div className="text-[#C8A47A] text-xs uppercase">Resultado Líquido</div><div className={`font-bold ${dre.resultado >= 0 ? "text-[#9FD89F]" : "text-[#E8A0A0]"}`} data-testid="ped-dre-resultado">{fmtMoney(dre.resultado)}</div></div>
+                <div><div className="text-[#C8A47A] text-xs uppercase">Margem</div><div className={`font-bold ${dre.margem >= 0 ? "text-[#9FD89F]" : "text-[#E8A0A0]"}`}>{fmtBR(dre.margem)}%</div></div>
+              </div>
             </div>
 
             <div className="flex gap-2 justify-end mt-4">

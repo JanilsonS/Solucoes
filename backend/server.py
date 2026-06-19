@@ -1,10 +1,11 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Query, UploadFile, File, Header, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import requests
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Literal, Dict, Any
@@ -37,6 +38,38 @@ def now_iso() -> str:
 
 def new_id() -> str:
     return str(uuid.uuid4())
+
+
+# ====================== OBJECT STORAGE ======================
+STORAGE_URL = "https://integrations.emergentagent.com/objstore/api/v1/storage"
+EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
+APP_NAME = "mm-confeitaria"
+MIME_TYPES = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif", "webp": "image/webp"}
+_storage_key = None
+
+
+def init_storage():
+    global _storage_key
+    if _storage_key:
+        return _storage_key
+    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
+    resp.raise_for_status()
+    _storage_key = resp.json()["storage_key"]
+    return _storage_key
+
+
+def put_object(path: str, data: bytes, content_type: str) -> dict:
+    key = init_storage()
+    resp = requests.put(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key, "Content-Type": content_type}, data=data, timeout=120)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def get_object(path: str):
+    key = init_storage()
+    resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
+    resp.raise_for_status()
+    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
 
 # ====================== AUTH ======================
@@ -602,6 +635,7 @@ async def set_perda(pid: str, data: ProdutoPerdaIn, u=Depends(get_user)):
 class ClienteIn(BaseModel):
     nome: str
     telefone: str
+    endereco: Optional[str] = ""
 
 
 @api.get("/clientes")
@@ -613,8 +647,10 @@ async def list_clientes(u=Depends(get_user)):
 async def upsert_cliente(data: ClienteIn, u=Depends(get_user)):
     existing = await db.clientes.find_one({"telefone": data.telefone})
     if existing:
-        await db.clientes.update_one({"id": existing['id']}, {"$set": {"nome": data.nome}})
-        return {**existing, "nome": data.nome}
+        upd = {"nome": data.nome, "endereco": data.endereco or existing.get("endereco", "")}
+        await db.clientes.update_one({"id": existing['id']}, {"$set": upd})
+        existing.pop("_id", None)
+        return {**existing, **upd}
     doc = {"id": new_id(), **data.model_dump(), "created_at": now_iso()}
     await db.clientes.insert_one(doc)
     doc.pop("_id", None)
@@ -635,8 +671,10 @@ class ReceitaComercialIn(BaseModel):
 
 
 class PedidoIn(BaseModel):
+    cliente_id: Optional[str] = None
     cliente_nome: str
     cliente_telefone: str
+    cliente_endereco: Optional[str] = ""
     forma_pagamento: str
     aprovacao: Literal["APROVADO", "CANCELADO", "PENDENTE"] = "PENDENTE"
     producao: Literal["EM_PRODUCAO", "ENTREGUE", "PENDENTE"] = "PENDENTE"
@@ -646,6 +684,8 @@ class PedidoIn(BaseModel):
     receita_comercial: List[ReceitaComercialIn] = []
     observacoes: Optional[str] = ""
     data_evento: Optional[str] = None
+    data_entrega: Optional[str] = None
+    hora_entrega: Optional[str] = None
 
 
 async def next_pedido_num() -> int:
@@ -660,6 +700,39 @@ async def list_pedidos(u=Depends(get_user)):
     return await db.pedidos.find({}, {"_id": 0}).sort("numero", -1).to_list(5000)
 
 
+async def compute_pedido_dre(p: dict) -> dict:
+    """Per-order DRE: Receita - Deduções(índices) - Custo dos produtos = Resultado líquido."""
+    receita_produtos = sum(i.get('quantidade', 0) * i.get('preco_unitario', 0) for i in p.get('itens', []))
+    receita_comercial = sum(r.get('valor', 0) for r in p.get('receita_comercial', []))
+    desconto_val = p.get('desconto_valor', 0)
+    receita_total = receita_produtos + receita_comercial - desconto_val
+
+    indices = await db.markups.find({"grupo": "INDICE"}, {"_id": 0}).to_list(1000)
+    total_indices = sum(m.get('indice', 0) for m in indices)
+    deducoes = receita_total * (total_indices / 100)
+
+    custo_produtos = 0.0
+    for it in p.get('itens', []):
+        ficha = await db.fichas_tecnicas.find_one({"produto_id": it['produto_id']}, {"_id": 0})
+        if ficha:
+            enr = await compute_ficha_costs(ficha)
+            custo_produtos += enr['total_custo'] * it.get('quantidade', 0)
+
+    resultado_liquido = receita_total - deducoes - custo_produtos
+    margem_pct = (resultado_liquido / receita_total * 100) if receita_total else 0
+    return {
+        "receita_produtos": receita_produtos,
+        "receita_comercial": receita_comercial,
+        "desconto_valor": desconto_val,
+        "receita_total": receita_total,
+        "total_indices_pct": total_indices,
+        "deducoes": deducoes,
+        "custo_produtos": custo_produtos,
+        "resultado_liquido": resultado_liquido,
+        "margem_pct": margem_pct,
+    }
+
+
 @api.get("/pedidos/{pid}")
 async def get_pedido(pid: str, u=Depends(get_user)):
     p = await db.pedidos.find_one({"id": pid}, {"_id": 0})
@@ -672,6 +745,7 @@ async def get_pedido(pid: str, u=Depends(get_user)):
             it['descricao'] = prod['descricao']
             it['unidade'] = prod['unidade']
             it['codigo'] = prod['codigo']
+    p['dre'] = await compute_pedido_dre(p)
     return p
 
 
@@ -679,7 +753,7 @@ async def get_pedido(pid: str, u=Depends(get_user)):
 async def create_pedido(data: PedidoIn, u=Depends(get_user)):
     num = await next_pedido_num()
     # Save cliente
-    await upsert_cliente(ClienteIn(nome=data.cliente_nome, telefone=data.cliente_telefone), u)
+    await upsert_cliente(ClienteIn(nome=data.cliente_nome, telefone=data.cliente_telefone, endereco=data.cliente_endereco or ""), u)
     doc = {"id": new_id(), "numero": num, **data.model_dump(), "created_at": now_iso()}
     # compute totals
     subtotal = sum(i['quantidade'] * i['preco_unitario'] for i in doc['itens'])
@@ -879,6 +953,141 @@ async def set_lucro_ind(pid: str, data: ProdutoLucroIn, u=Depends(get_user)):
     return {"ok": True}
 
 
+# ====================== CONTROLE DE PRODUÇÃO ======================
+@api.get("/producao")
+async def controle_producao(u=Depends(get_user)):
+    """Consolida produtos a produzir de pedidos não cancelados, agrupados por data de entrega."""
+    pedidos = await db.pedidos.find({"aprovacao": {"$ne": "CANCELADO"}}, {"_id": 0}).to_list(10000)
+    ordens = []
+    for p in pedidos:
+        itens = []
+        for it in p.get('itens', []):
+            prod = await db.produtos.find_one({"id": it['produto_id']}, {"_id": 0})
+            if prod:
+                itens.append({
+                    "codigo": prod['codigo'],
+                    "descricao": prod['descricao'],
+                    "unidade": prod['unidade'],
+                    "quantidade": it.get('quantidade', 0),
+                })
+        if not itens:
+            continue
+        ordens.append({
+            "pedido_id": p['id'],
+            "numero": p.get('numero'),
+            "cliente_nome": p.get('cliente_nome'),
+            "cliente_telefone": p.get('cliente_telefone'),
+            "cliente_endereco": p.get('cliente_endereco', ''),
+            "data_entrega": p.get('data_entrega') or p.get('data_evento'),
+            "hora_entrega": p.get('hora_entrega'),
+            "producao": p.get('producao'),
+            "aprovacao": p.get('aprovacao'),
+            "itens": itens,
+        })
+    # consolidado por produto
+    consolidado = {}
+    for o in ordens:
+        for it in o['itens']:
+            key = it['codigo']
+            consolidado.setdefault(key, {"codigo": it['codigo'], "descricao": it['descricao'], "unidade": it['unidade'], "quantidade": 0})
+            consolidado[key]['quantidade'] += it['quantidade']
+    ordens.sort(key=lambda x: (x['data_entrega'] or "9999", x['hora_entrega'] or "99:99"))
+    return {"ordens": ordens, "consolidado": sorted(consolidado.values(), key=lambda x: x['descricao'])}
+
+
+# ====================== FICHA DETALHADA (CÓSMICA) ======================
+class NutrienteIn(BaseModel):
+    label: str
+    valor: float
+    unidade: str = "g"
+    max_ref: float = 100
+
+
+class CamadaIn(BaseModel):
+    nome: str
+    nivel: float = 50
+
+
+class ProdutoDetalhesIn(BaseModel):
+    descricao_pt: Optional[str] = ""
+    descricao_en: Optional[str] = ""
+    foto_path: Optional[str] = ""
+    local: Optional[str] = ""
+    ingredientes_chave: List[str] = []
+    nutricionais: List[NutrienteIn] = []
+    estrutura: List[CamadaIn] = []
+    crocancia: float = 50
+    cremor: float = 50
+    suavidade: float = 50
+    tempo_preparo: Optional[str] = ""
+    temp_assamento: Optional[str] = ""
+    rendimento: Optional[str] = ""
+    armazenamento: Optional[str] = ""
+    validade_dias: Optional[str] = ""
+    alergenos: List[str] = []
+    sugestao_servico: List[str] = []
+
+
+@api.get("/produtos/{pid}/detalhes")
+async def get_detalhes(pid: str, u=Depends(get_user)):
+    prod = await db.produtos.find_one({"id": pid}, {"_id": 0})
+    if not prod:
+        raise HTTPException(404, "Produto não encontrado")
+    det = await db.produto_detalhes.find_one({"produto_id": pid}, {"_id": 0})
+    if not det:
+        det = ProdutoDetalhesIn().model_dump()
+        det['produto_id'] = pid
+    det['produto'] = {"codigo": prod['codigo'], "descricao": prod['descricao'], "unidade": prod['unidade']}
+    return det
+
+
+@api.put("/produtos/{pid}/detalhes")
+async def save_detalhes(pid: str, data: ProdutoDetalhesIn, u=Depends(get_user)):
+    if not await db.produtos.find_one({"id": pid}):
+        raise HTTPException(404, "Produto não encontrado")
+    doc = data.model_dump()
+    doc['produto_id'] = pid
+    doc['updated_at'] = now_iso()
+    await db.produto_detalhes.update_one({"produto_id": pid}, {"$set": doc}, upsert=True)
+    return {"ok": True}
+
+
+# ====================== UPLOAD ======================
+@api.post("/upload")
+async def upload_file(file: UploadFile = File(...), u=Depends(get_user)):
+    ext = file.filename.split(".")[-1].lower() if "." in file.filename else "bin"
+    if ext not in MIME_TYPES:
+        raise HTTPException(400, "Formato de imagem inválido (use jpg, png, webp ou gif)")
+    path = f"{APP_NAME}/uploads/{u['id']}/{uuid.uuid4()}.{ext}"
+    data = await file.read()
+    content_type = MIME_TYPES.get(ext, file.content_type or "application/octet-stream")
+    result = put_object(path, data, content_type)
+    await db.files.insert_one({
+        "id": new_id(), "storage_path": result["path"], "original_filename": file.filename,
+        "content_type": content_type, "size": result.get("size", len(data)),
+        "is_deleted": False, "created_at": now_iso(),
+    })
+    return {"path": result["path"]}
+
+
+@api.get("/files/{path:path}")
+async def download_file(path: str, authorization: str = Header(None), auth: str = Query(None)):
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+    elif auth:
+        token = auth
+    try:
+        jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+    except Exception:
+        raise HTTPException(401, "Não autorizado")
+    record = await db.files.find_one({"storage_path": path, "is_deleted": False})
+    if not record:
+        raise HTTPException(404, "Arquivo não encontrado")
+    content, content_type = get_object(path)
+    return Response(content=content, media_type=record.get("content_type", content_type))
+
+
 @api.get("/")
 async def root():
     return {"app": "MM Confeitaria & Eventos - Sistema de Gestão", "status": "online"}
@@ -895,6 +1104,15 @@ app.add_middleware(
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+
+@app.on_event("startup")
+async def startup_storage():
+    try:
+        init_storage()
+        logger.info("Object storage initialized")
+    except Exception as e:
+        logger.error(f"Storage init failed: {e}")
 
 
 @app.on_event("shutdown")

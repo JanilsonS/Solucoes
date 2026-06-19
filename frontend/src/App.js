@@ -14,6 +14,8 @@ import FichaTecnica from "@/pages/FichaTecnica";
 import TabelaPreco from "@/pages/TabelaPreco";
 import Pedidos from "@/pages/Pedidos";
 import DRE from "@/pages/DRE";
+import ControleProducao from "@/pages/ControleProducao";
+import FichaDetalhada from "@/pages/FichaDetalhada";
 
 const Protected = ({ children }) => {
   const token = localStorage.getItem("mm_token");
@@ -45,6 +47,8 @@ function App() {
             <Route path="ficha-tecnica" element={<FichaTecnica />} />
             <Route path="tabela-preco" element={<TabelaPreco />} />
             <Route path="pedidos" element={<Pedidos />} />
+            <Route path="producao" element={<ControleProducao />} />
+            <Route path="ficha-detalhada" element={<FichaDetalhada />} />
             <Route path="dre" element={<DRE />} />
           </Route>
         </Routes>
