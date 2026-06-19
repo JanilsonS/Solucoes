@@ -1,7 +1,7 @@
 """Backend tests for MM Confeitaria & Eventos"""
 import os, requests, pytest, uuid
 
-BASE = os.environ.get('REACT_APP_BACKEND_URL', 'https://confeitaria-py.preview.emergentagent.com').rstrip('/')
+BASE = os.environ.get('REACT_APP_BACKEND_URL', 'https://ficha-tecnica-3.preview.emergentagent.com').rstrip('/')
 API = f"{BASE}/api"
 
 @pytest.fixture(scope="session")
