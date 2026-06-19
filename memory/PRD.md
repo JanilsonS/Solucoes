@@ -29,7 +29,17 @@ Sistema de gestão e precificação para confeitaria MM, em Python/FastAPI + Rea
 ## Personas
 - Confeiteira/proprietária (Admin MM) - acesso total
 
+## Implementado (Fase 1 - Ajustes - Jun 2026)
+- [x] Horas/Mês GLOBAL: configuração única em Custos (collection `configuracoes`, GET/PUT /api/config). Custo/Hora = Valor Mensal ÷ Horas/Mês global. Campo por linha removido.
+- [x] Ficha Técnica - campo Margem com 5 opções mostrando % reais: Lucro 1-4 (do Markup) + "Tabela de Preço (X%)" = % Lucro individual do produto (margem_lucro_idx=5).
+- [x] Tratamento global de erros (interceptor axios) normaliza detail do FastAPI para string (evita crash React em 422).
+
 ## Próximas tarefas / Backlog
+### Fase 2 (P1) - próximo
+- P1: Cadastro de Pedidos detalhado (cliente, endereço, telefone, data/hora entrega, itens, qtd, descontos, receita comercial, DRE por pedido)
+- P1: Tela de Controle de Produção (lista consolidada de produtos a produzir, pedidos não cancelados)
+- P1: Ficha Detalhada Cósmica (relatório visual estilo rótulo nutricional, foto do produto, alérgenos, parâmetros)
+### Outros
 - P1: Upload de logo dinâmico via interface (atualmente fixo via URL)
 - P1: Edição inline do markup selecionado nos pedidos com recálculo automático
 - P2: Notificação por WhatsApp do pedido ao cliente (integração Twilio/Z-API)

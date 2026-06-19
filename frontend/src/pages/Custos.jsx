@@ -22,6 +22,9 @@ export default function Custos() {
   useEffect(() => { load(); }, []);
 
   const saveHoras = async () => {
+    if (horasMes === "" || isNaN(Number(horasMes)) || Number(horasMes) <= 0) {
+      return toast.error("Informe um valor válido de Horas/Mês");
+    }
     await api.put("/config", { horas_mes_global: Number(horasMes) });
     toast.success("Horas/Mês global atualizado");
     load();

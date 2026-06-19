@@ -20,6 +20,14 @@ api.interceptors.response.use(
       localStorage.removeItem("mm_user");
       if (window.location.pathname !== "/login") window.location.href = "/login";
     }
+    // Normalize FastAPI error detail (can be an array of objects) into a readable string
+    const detail = e.response?.data?.detail;
+    if (detail && typeof detail !== "string") {
+      const text = Array.isArray(detail)
+        ? detail.map((d) => d?.msg || JSON.stringify(d)).join(", ")
+        : JSON.stringify(detail);
+      e.response.data.detail = text;
+    }
     return Promise.reject(e);
   }
 );

@@ -149,14 +149,14 @@ export default function FichaTecnica() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="mm-label">Markup Lucro</label>
-                <select className="mm-input" value={ficha.markup_lucro_id || ""} onChange={(e) => { const v = e.target.value || null; setFicha({ ...ficha, markup_lucro_id: v }); updateMeta("markup_lucro_id", v); }}>
+                <select data-testid="ficha-markup-lucro-select" className="mm-input" value={ficha.markup_lucro_id || ""} onChange={(e) => { const v = e.target.value || null; setFicha({ ...ficha, markup_lucro_id: v }); updateMeta("markup_lucro_id", v); }}>
                   <option value="">--</option>
                   {markupsLucro.map((m) => <option key={m.id} value={m.id}>{m.descricao}</option>)}
                 </select>
               </div>
               <div>
                 <label className="mm-label">Margem</label>
-                <select className="mm-input" value={ficha.margem_lucro_idx} onChange={(e) => { const v = Number(e.target.value); setFicha({ ...ficha, margem_lucro_idx: v }); updateMeta("margem_lucro_idx", v); }}>
+                <select data-testid="ficha-margem-select" className="mm-input" value={ficha.margem_lucro_idx} onChange={(e) => { const v = Number(e.target.value); setFicha({ ...ficha, margem_lucro_idx: v }); updateMeta("margem_lucro_idx", v); }}>
                   {[1, 2, 3, 4].map((i) => (
                     <option key={i} value={i}>{`Lucro ${i} (${fmtBR(ficha.lucros_disponiveis?.[i - 1] || 0)}%)`}</option>
                   ))}
