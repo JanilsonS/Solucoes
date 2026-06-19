@@ -1,0 +1,35 @@
+{
+  "summary": "Re-tested the two P0 adjustments (Custos global Horas/Mês + Ficha Técnica 5-option Margem dropdown). Backend endpoints confirmed via curl. Frontend E2E via Playwright confirmed both features work end-to-end. Found 1 unrelated HIGH-priority issue: when a 422 response is returned from the backend, the React app crashes with 'Objects are not valid as a React child' because the FastAPI error detail object is rendered directly (likely in toast.error). This happens if the global horas input is left empty and Salvar is clicked.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Global error handling / toast", "issue": "When backend returns 422 (FastAPI validation error with shape {detail:[{type,loc,msg,input,url}]}), the app renders the error object directly causing React 'Objects are not valid as a React child' crash + red error overlay. Reproduced by clearing custos-horas-mes-input and clicking Salvar.", "selector": "[data-testid='custos-horas-mes-save']", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Ficha Técnica produto <select>", "issues": ["Dev console shows hydration warning '<span> cannot be a child of <option>' due to Emergent dev instrumentation wrapping option children in span. Cosmetic in dev, but worth noting."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_mm_confeitaria.py", "/app/test_reports/pytest/results.xml"],
+  "action_items": [
+    "Harden global API/error toast handling: when an Axios error is caught, render error.response.data.detail correctly (string-stringify if object/array) to avoid passing FastAPI validation objects to React/toast.",
+    "Optionally add client-side validation on custos-horas-mes-input to prevent submitting empty/invalid values (avoid 422 round-trip)."
+  ],
+  "critical_code_review_comments": [
+    "Custos.jsx: saveHoras() sends Number(horasMes) without guarding against NaN/empty -> backend returns 422 and global error toast renders the object causing UI crash. Add: if (!horasMes || isNaN(Number(horasMes))) return toast.error('Informe um valor válido').",
+    "FichaTecnica.jsx: Margem select correctly renders 5 options with fmtBR(...) values; selecting value=5 triggers updateMeta('margem_lucro_idx',5) which the backend honors (returns margem_lucro_pct = lucro_individual_pct). OK.",
+    "FichaTecnica.jsx: When markup_lucro_id is null, options L1..L4 all show 0,00% (because backend returns lucros_disponiveis=[]). Consider disabling L1-L4 or showing a hint until a Markup Lucro is chosen.",
+    "Both Margem and Markup Lucro selects are missing data-testid attributes; only ficha-produto-select has one. Add ficha-markup-lucro-select and ficha-margem-select for testability."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "95%"},
+  "test_credentials": "admin@mm.com / mm123456 (verified)",
+  "seed_data_creation": "None (reused existing 18 produtos and 4 custos accounts).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "P0 features VERIFIED working: (1) /custos config bar saves horas_mes_global; first row Custo/Hora recalculated 13,64 (220h) -> 15,00 (200h) for 3000/h valor. Per-row horas_mes is removed from the create/edit form. (2) /ficha-tecnica Margem select shows 'Lucro 1 (5,00%)..Lucro 4 (20,00%)' and 'Tabela de Preço (7,00%)' (the product's lucro_pct_individual). Selecting value=5 updates %Margem card to 7,00%; Lucro 1 -> 5,00%. Login MUST use press_sequentially for the controlled inputs (do NOT use fill on first focus or React state lags). One HIGH bug: 422 error response rendered as React child (object) crashes UI - fix in global axios/toast error handler.",
+  "rca of the issue": "422 crash RCA: FastAPI returns body {detail:[{type,loc,msg,input,url,...}]}. The current Axios error handler (interceptor or local catch) passes error.response.data or error.response.data.detail (an array of objects) to toast.error / setError / render. Solution: stringify or extract human-readable message: const msg = err.response?.data?.detail; const text = typeof msg === 'string' ? msg : Array.isArray(msg) ? msg.map(m => m.msg).join(', ') : 'Erro'. Reproduction: 1) Login as admin. 2) Open /custos. 3) Clear the Horas/Mês global input. 4) Click Salvar -> red 'Uncaught runtime errors' overlay appears with 'Objects are not valid as a React child (found: object with keys {type, loc, msg, input, url})'."
+}

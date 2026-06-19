@@ -157,7 +157,10 @@ export default function FichaTecnica() {
               <div>
                 <label className="mm-label">Margem</label>
                 <select className="mm-input" value={ficha.margem_lucro_idx} onChange={(e) => { const v = Number(e.target.value); setFicha({ ...ficha, margem_lucro_idx: v }); updateMeta("margem_lucro_idx", v); }}>
-                  <option value="1">Lucro 1</option><option value="2">Lucro 2</option><option value="3">Lucro 3</option><option value="4">Lucro 4</option>
+                  {[1, 2, 3, 4].map((i) => (
+                    <option key={i} value={i}>{`Lucro ${i} (${fmtBR(ficha.lucros_disponiveis?.[i - 1] || 0)}%)`}</option>
+                  ))}
+                  <option value="5">{`Tabela de Preço (${fmtBR(ficha.lucro_individual_pct || 0)}%)`}</option>
                 </select>
               </div>
             </div>

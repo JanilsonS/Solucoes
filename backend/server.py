@@ -260,15 +260,39 @@ class CustoIn(BaseModel):
     codigo: str
     descricao: str
     valor_mensal: float = 0
-    horas_mes: float = 0
     grupo_id: Optional[str] = None
+
+
+async def get_horas_mes_global() -> float:
+    cfg = await db.configuracoes.find_one({"id": "global"}, {"_id": 0})
+    return (cfg or {}).get("horas_mes_global", 220) or 0
+
+
+@api.get("/config")
+async def get_config(u=Depends(get_user)):
+    cfg = await db.configuracoes.find_one({"id": "global"}, {"_id": 0})
+    if not cfg:
+        cfg = {"id": "global", "horas_mes_global": 220}
+    return cfg
+
+
+class ConfigIn(BaseModel):
+    horas_mes_global: float = 220
+
+
+@api.put("/config")
+async def update_config(data: ConfigIn, u=Depends(get_user)):
+    await db.configuracoes.update_one({"id": "global"}, {"$set": {"id": "global", "horas_mes_global": data.horas_mes_global}}, upsert=True)
+    return {"ok": True, "horas_mes_global": data.horas_mes_global}
 
 
 @api.get("/custos")
 async def list_custos(u=Depends(get_user)):
     items = await db.custos.find({}, {"_id": 0}).sort("codigo", 1).to_list(5000)
+    hm = await get_horas_mes_global()
     for it in items:
-        it['custo_hora'] = (it.get('valor_mensal', 0) / it.get('horas_mes', 0)) if it.get('horas_mes') else 0
+        it['horas_mes'] = hm
+        it['custo_hora'] = (it.get('valor_mensal', 0) / hm) if hm else 0
     return items
 
 
@@ -409,6 +433,7 @@ async def compute_ficha_costs(ficha: dict) -> dict:
     """Returns enriched ficha with per-item costs and subtotals."""
     enriched_items = []
     subtotals = {k: 0.0 for k in ["materia_prima", "confeito", "saborizacao", "embalagem", "semi_acabado", "tempo_maquina", "custo_indireto"]}
+    hm_global = await get_horas_mes_global()
 
     for it in ficha.get("items", []):
         tipo = it['tipo']
@@ -443,15 +468,14 @@ async def compute_ficha_costs(ficha: dict) -> dict:
             if ref_tipo == 'conta':
                 c = await db.custos.find_one({"id": ref_id}, {"_id": 0})
                 if c:
-                    ch = (c.get('valor_mensal', 0) / c.get('horas_mes', 0)) if c.get('horas_mes') else 0
+                    ch = (c.get('valor_mensal', 0) / hm_global) if hm_global else 0
                     item_data.update({"codigo": c['codigo'], "descricao": c['descricao'], "unidade": "h", "custo_unit": ch, "custo_total": ch * qtd})
             else:  # grupo
                 g = await db.groups.find_one({"id": ref_id}, {"_id": 0})
                 if g:
                     items_g = await db.custos.find({"grupo_id": ref_id}, {"_id": 0}).to_list(1000)
                     total_vm = sum(c.get('valor_mensal', 0) for c in items_g)
-                    total_hm = sum(c.get('horas_mes', 0) for c in items_g)
-                    ch = (total_vm / total_hm) if total_hm else 0
+                    ch = (total_vm / hm_global) if hm_global else 0
                     item_data.update({"codigo": g['id'][:6], "descricao": f"[Grupo] {g['nome']}", "unidade": "h", "custo_unit": ch, "custo_total": ch * qtd})
 
         subtotals[tipo] += item_data['custo_total']
@@ -463,11 +487,23 @@ async def compute_ficha_costs(ficha: dict) -> dict:
     indices = await db.markups.find({"grupo": "INDICE"}, {"_id": 0}).to_list(1000)
     total_indices = sum(m.get('indice', 0) for m in indices)
     margem_lucro = 0
+    idx = ficha.get('margem_lucro_idx', 1) or 1
+    lucros_disponiveis = []
+    ml = None
     if ficha.get('markup_lucro_id'):
         ml = await db.markups.find_one({"id": ficha['markup_lucro_id']}, {"_id": 0})
-        if ml:
-            idx = ficha.get('margem_lucro_idx', 1) or 1
-            margem_lucro = ml.get(f'lucro{idx}', 0) or 0
+    if ml:
+        lucros_disponiveis = [ml.get(f'lucro{i}', 0) or 0 for i in range(1, 5)]
+    # 5th option: produto individual % lucro from price table
+    lucro_individual = 0
+    if ficha.get('produto_id'):
+        prod_doc = await db.produtos.find_one({"id": ficha['produto_id']}, {"_id": 0})
+        if prod_doc:
+            lucro_individual = prod_doc.get('lucro_pct_individual', 0) or 0
+    if idx == 5:
+        margem_lucro = lucro_individual
+    elif ml:
+        margem_lucro = ml.get(f'lucro{idx}', 0) or 0
 
     divisor = 1 - (total_indices + margem_lucro) / 100
     preco_recomendado = (total_custo / divisor) if divisor > 0 else 0
@@ -479,6 +515,8 @@ async def compute_ficha_costs(ficha: dict) -> dict:
         "total_custo": total_custo,
         "total_indices_pct": total_indices,
         "margem_lucro_pct": margem_lucro,
+        "lucros_disponiveis": lucros_disponiveis,
+        "lucro_individual_pct": lucro_individual,
         "markup_divisor": divisor,
         "preco_recomendado": preco_recomendado,
         "custo_por_unidade": (total_custo / ficha.get('peso_total', 0)) if ficha.get('peso_total') else 0,
