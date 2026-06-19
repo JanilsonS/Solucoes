@@ -34,11 +34,15 @@ Sistema de gestão e precificação para confeitaria MM, em Python/FastAPI + Rea
 - [x] Ficha Técnica - campo Margem com 5 opções mostrando % reais: Lucro 1-4 (do Markup) + "Tabela de Preço (X%)" = % Lucro individual do produto (margem_lucro_idx=5).
 - [x] Tratamento global de erros (interceptor axios) normaliza detail do FastAPI para string (evita crash React em 422).
 
+## Implementado (Fase 2 - Jun 2026)
+- [x] Cadastro de Pedidos detalhado: seleção de cliente do cadastro (ou novo), endereço, data + hora de entrega, preço unitário vindo da coluna "% Lucro" (preco_tabela_individual), e DRE por pedido (Receita − Deduções(índices) − Custo dos produtos = Resultado líquido + margem).
+- [x] Controle de Produção (/producao): resumo consolidado de produtos a produzir + agenda de entregas (pedidos não cancelados) com cliente, telefone, endereço, data/hora.
+- [x] Ficha Detalhada Cósmica (/ficha-detalhada): rótulo visual escuro/futurista por produto com upload de foto (object storage), descrição PT/EN, ingredientes-chave, valores nutricionais com barras, estrutura/camadas, texturas, parâmetros de produção, armazenamento, alérgenos, sugestão de serviço. Form editável + preview.
+- [x] Object storage integrado (EMERGENT_LLM_KEY) para fotos de produto (POST /api/upload, GET /api/files/{path}?auth=).
+
 ## Próximas tarefas / Backlog
 ### Fase 2 (P1) - próximo
-- P1: Cadastro de Pedidos detalhado (cliente, endereço, telefone, data/hora entrega, itens, qtd, descontos, receita comercial, DRE por pedido)
-- P1: Tela de Controle de Produção (lista consolidada de produtos a produzir, pedidos não cancelados)
-- P1: Ficha Detalhada Cósmica (relatório visual estilo rótulo nutricional, foto do produto, alérgenos, parâmetros)
+- (concluído acima)
 ### Outros
 - P1: Upload de logo dinâmico via interface (atualmente fixo via URL)
 - P1: Edição inline do markup selecionado nos pedidos com recálculo automático
