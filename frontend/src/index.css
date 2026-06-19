@@ -134,11 +134,14 @@ body {
 .mm-table thead th:first-child { border-top-left-radius: 12px; }
 .mm-table thead th:last-child { border-top-right-radius: 12px; }
 .mm-table tbody td {
-  padding: 11px 14px;
+  padding: 6px 12px;
   border-bottom: 1px solid #E8DDD3;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--mm-brown);
 }
+.mm-table td.num, .mm-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.mm-table thead .filter-row th { padding: 4px 8px; background: #6E4733; }
+.mm-table thead .filter-row input { width: 100%; padding: 3px 6px; border-radius: 4px; border: none; font-size: 12px; background: #FAF6F2; color: #3D2817; }
 .mm-table tbody tr:nth-child(odd) td { background: #FFFFFF; }
 .mm-table tbody tr:nth-child(even) td { background: #F5EBE0; }
 .mm-table tbody tr:hover td { background: #EFD9C5 !important; }

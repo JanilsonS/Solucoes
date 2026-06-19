@@ -35,6 +35,7 @@ export default function Produtos() {
       onSave={async (payload, id) => id ? api.put(`/produtos/${id}`, payload) : api.post("/produtos", payload)}
       onDelete={(id) => api.delete(`/produtos/${id}`)}
       onReload={load}
+      autoCodeType="produto"
     />
   );
 }

@@ -531,6 +531,9 @@ async def tabela_precos(u=Depends(get_user)):
                 preco = (custo_com_perda / div) if div > 0 else 0
                 precos_finais.append({"lucro_pct": lucro, "preco": preco})
 
+        lucro_individual = p.get('lucro_pct_individual', 0)
+        div_ind = 1 - (total_indices + lucro_individual) / 100
+        preco_tabela_individual = (custo_com_perda / div_ind) if div_ind > 0 else 0
         rows.append({
             "produto_id": p['id'],
             "codigo": p['codigo'],
@@ -541,6 +544,8 @@ async def tabela_precos(u=Depends(get_user)):
             "perda_pct": perda_pct,
             "custo_com_perda": custo_com_perda,
             "precos_finais": precos_finais,
+            "lucro_pct_individual": lucro_individual,
+            "preco_tabela_individual": preco_tabela_individual,
         })
     return {"rows": rows, "total_indices_pct": total_indices}
 
@@ -812,6 +817,28 @@ async def dashboard(u=Depends(get_user)):
         "faturamento_6m": fat_mes,
         "status_producao": status_counts,
     }
+
+
+@api.get("/next-code/{tipo}")
+async def next_code(tipo: str, u=Depends(get_user)):
+    prefix_map = {"materia_prima": ("MP", "materias_primas"), "equipamento": ("EQ", "equipamentos"), "custo": ("CT", "custos"), "markup": ("MK", "markups"), "produto": ("PD", "produtos")}
+    if tipo not in prefix_map:
+        raise HTTPException(400, "Tipo inválido")
+    prefix, coll = prefix_map[tipo]
+    items = await db[coll].find({"codigo": {"$regex": f"^{prefix}\\d{{3}}$"}}, {"codigo": 1, "_id": 0}).to_list(5000)
+    nums = [int(it['codigo'][2:]) for it in items if it.get('codigo', '').startswith(prefix)]
+    next_num = (max(nums) + 1) if nums else 1
+    return {"codigo": f"{prefix}{next_num:03d}"}
+
+
+class ProdutoLucroIn(BaseModel):
+    lucro_pct_individual: float
+
+
+@api.put("/produtos/{pid}/lucro-individual")
+async def set_lucro_ind(pid: str, data: ProdutoLucroIn, u=Depends(get_user)):
+    await db.produtos.update_one({"id": pid}, {"$set": {"lucro_pct_individual": data.lucro_pct_individual}})
+    return {"ok": True}
 
 
 @api.get("/")

@@ -35,6 +35,7 @@ export default function Custos() {
       onSave={async (payload, id) => id ? api.put(`/custos/${id}`, payload) : api.post("/custos", payload)}
       onDelete={(id) => api.delete(`/custos/${id}`)}
       onReload={load}
+      autoCodeType="custo"
       computedCols={[{ label: "Custo Hora (R$)", value: (r) => r.custo_hora || 0, decimals: 2 }]}
     />
   );

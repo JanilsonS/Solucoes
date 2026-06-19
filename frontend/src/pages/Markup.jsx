@@ -15,6 +15,14 @@ export default function Markup() {
   };
   useEffect(() => { load(); }, []);
 
+  const fetchNextCode = async () => {
+    try {
+      const { data } = await api.get("/next-code/markup");
+      setForm((f) => ({ ...f, descricao: f.descricao || data.codigo }));
+    } catch {}
+  };
+  useEffect(() => { if (!editId && !form.descricao) fetchNextCode(); }, [editId, items.length]);
+
   const submit = async () => {
     try {
       const payload = { ...form };

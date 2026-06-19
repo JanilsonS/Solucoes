@@ -39,6 +39,7 @@ export default function MateriaPrima() {
       onSave={async (payload, id) => id ? api.put(`/materias-primas/${id}`, payload) : api.post("/materias-primas", payload)}
       onDelete={(id) => api.delete(`/materias-primas/${id}`)}
       onReload={load}
+      autoCodeType="materia_prima"
       computedCols={[{ label: "Custo Unit.", value: (r) => r.custo_unitario || 0, decimals: 4 }]}
     />
   );

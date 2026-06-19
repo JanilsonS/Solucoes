@@ -23,24 +23,52 @@ export default function CrudShell({
   onCreateGroup,
   computedCols = [],
   extraSummary = null,
+  autoCodeType = null,
 }) {
   const [form, setForm] = useState({});
   const [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState("");
+  const [colFilters, setColFilters] = useState({});
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
 
-  const filtered = useMemo(() => {
-    if (!search) return items;
-    const s = search.toLowerCase();
-    return items.filter((it) =>
-      Object.values(it).some((v) => String(v ?? "").toLowerCase().includes(s))
-    );
-  }, [items, search]);
+  // Auto-fetch next code when starting new
+  const fetchNextCode = async () => {
+    if (!autoCodeType) return;
+    try {
+      const api = (await import("@/lib/api")).default;
+      const { data } = await api.get(`/next-code/${autoCodeType}`);
+      setForm((f) => ({ ...f, codigo: data.codigo }));
+    } catch {}
+  };
 
-  const clearForm = () => {
+  useEffect(() => {
+    if (!editingId && autoCodeType && !form.codigo) fetchNextCode();
+  }, [editingId, items.length]);
+
+  const filtered = useMemo(() => {
+    let result = items;
+    if (search) {
+      const s = search.toLowerCase();
+      result = result.filter((it) => Object.values(it).some((v) => String(v ?? "").toLowerCase().includes(s)));
+    }
+    Object.entries(colFilters).forEach(([k, v]) => {
+      if (v) {
+        const sv = v.toLowerCase();
+        result = result.filter((it) => {
+          let val = it[k];
+          if (k === "grupo_id" && groups) val = groups.find((g) => g.id === val)?.nome || "";
+          return String(val ?? "").toLowerCase().includes(sv);
+        });
+      }
+    });
+    return result;
+  }, [items, search, colFilters, groups]);
+
+  const clearForm = async () => {
     setForm({});
     setEditingId(null);
+    if (autoCodeType) await fetchNextCode();
   };
 
   const handleSubmit = async () => {
@@ -209,7 +237,7 @@ export default function CrudShell({
               {filtered.map((it) => (
                 <tr key={it.id} data-testid={`${testIdPrefix}-row-${it.id}`}>
                   {fields.filter((f) => !f.hideInTable).map((f) => (
-                    <td key={f.name}>
+                    <td key={f.name} className={f.type === "number" ? "num" : ""}>
                       {(() => {
                         let v = it[f.name];
                         if (f.type === "number") return fmtBR(v, f.decimals ?? 2);
@@ -219,7 +247,7 @@ export default function CrudShell({
                       })()}
                     </td>
                   ))}
-                  {computedCols.map((c) => <td key={c.label}>{fmtBR(c.value(it), c.decimals ?? 2)}</td>)}
+                  {computedCols.map((c) => <td key={c.label} className="num">{fmtBR(c.value(it), c.decimals ?? 2)}</td>)}
                   <td>
                     <button
                       data-testid={`${testIdPrefix}-edit-${it.id}`}

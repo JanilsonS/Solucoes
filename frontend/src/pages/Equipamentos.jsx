@@ -48,6 +48,7 @@ export default function Equipamentos() {
       onSave={async (payload, id) => id ? api.put(`/equipamentos/${id}`, payload) : api.post("/equipamentos", payload)}
       onDelete={(id) => api.delete(`/equipamentos/${id}`)}
       onReload={load}
+      autoCodeType="equipamento"
       computedCols={[{ label: "Custo Hora (R$)", value: (r) => r.custo_hora || 0, decimals: 2 }]}
       extraSummary={summary}
     />
