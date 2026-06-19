@@ -79,15 +79,31 @@ export default function FichaTecnica() {
   };
 
   const sourceOptions = () => {
-    if (tab === "semi_acabado") return produtos.filter((p) => p.id !== selProd).map((p) => ({ value: p.id, label: `${p.codigo} - ${p.descricao}` }));
-    if (tab === "tempo_maquina") return equip.map((p) => ({ value: p.id, label: `${p.codigo} - ${p.descricao}` }));
-    if (tab === "custo_indireto") {
-      const opts = newItem.ref_tipo === "grupo"
-        ? groupsCusto.map((g) => ({ value: g.id, label: `[Grupo] ${g.nome}` }))
-        : custos.map((c) => ({ value: c.id, label: `${c.codigo} - ${c.descricao}` }));
-      return opts;
+    const addedInTab = (ficha?.items || []).filter((i) => i.tipo === tab);
+    if (tab === "semi_acabado") {
+      const used = new Set(addedInTab.map((i) => i.ref_id));
+      return produtos.filter((p) => p.id !== selProd && !used.has(p.id)).map((p) => ({ value: p.id, label: `${p.codigo} - ${p.descricao}` }));
     }
-    return mp.map((p) => ({ value: p.id, label: `${p.codigo} - ${p.descricao}` }));
+    if (tab === "tempo_maquina") {
+      const used = new Set(addedInTab.map((i) => i.ref_id));
+      return equip.filter((p) => !used.has(p.id)).map((p) => ({ value: p.id, label: `${p.codigo} - ${p.descricao}` }));
+    }
+    if (tab === "custo_indireto") {
+      const addedContas = new Set(addedInTab.filter((i) => i.ref_tipo === "conta").map((i) => i.ref_id));
+      const addedGrupos = new Set(addedInTab.filter((i) => i.ref_tipo === "grupo").map((i) => i.ref_id));
+      if (newItem.ref_tipo === "grupo") {
+        // hide groups already added, or groups whose contas were added individually
+        return groupsCusto
+          .filter((g) => !addedGrupos.has(g.id) && !custos.some((c) => c.grupo_id === g.id && addedContas.has(c.id)))
+          .map((g) => ({ value: g.id, label: `[Grupo] ${g.nome}` }));
+      }
+      // hide contas already added, or contas whose group was added
+      return custos
+        .filter((c) => !addedContas.has(c.id) && !(c.grupo_id && addedGrupos.has(c.grupo_id)))
+        .map((c) => ({ value: c.id, label: `${c.codigo} - ${c.descricao}` }));
+    }
+    const used = new Set(addedInTab.map((i) => i.ref_id));
+    return mp.filter((p) => !used.has(p.id)).map((p) => ({ value: p.id, label: `${p.codigo} - ${p.descricao}` }));
   };
 
   const itemsTab = ficha?.items?.filter((i) => i.tipo === tab) || [];
