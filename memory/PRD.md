@@ -40,8 +40,15 @@ Sistema de gestão e precificação para confeitaria MM, em Python/FastAPI + Rea
 - [x] Ficha Detalhada Cósmica (/ficha-detalhada): rótulo visual escuro/futurista por produto com upload de foto (object storage), descrição PT/EN, ingredientes-chave, valores nutricionais com barras, estrutura/camadas, texturas, parâmetros de produção, armazenamento, alérgenos, sugestão de serviço. Form editável + preview.
 - [x] Object storage integrado (EMERGENT_LLM_KEY) para fotos de produto (POST /api/upload, GET /api/files/{path}?auth=).
 
+## Implementado (Fase 3 - Reescrita Pedidos + Dashboard - Jun 2026)
+- [x] Novo modelo de status: Status do Pedido (Cancelado/Aprovado/Entregue) + Status da Produção (Na fila/Em produção/Finalizado). Removido pagamento Pago/Aberto.
+- [x] Formas de Pagamento como cadastro/lista com "+" (/api/formas-pagamento).
+- [x] Cadastro de Pedidos (reescrito): cliente do cadastro ou novo com "+", endereço/endereço de entrega/ponto de referência, data do pedido + entrega + hora, grade de produtos com Custo Unit (col.13 Custo c/Perda) e Preço Unit (col.15 Preço de Tabela) automáticos, Custo/Preço Total, subtotal, desconto %, Total dos Produtos, seção "Outros" (Taxa Entrega/Carrinho Gourmet/Outros), Total do Pedido, DRE do Pedido ao vivo, PDF/Excel, Nº formatado 001.
+- [x] Controle de Pedidos (nova tela/relatório): tabela com filtros por coluna, ordenação ABC, detalhes expansíveis (+), selects de status (produção desabilitado quando Cancelado/Entregue), totalizador de Valor Total adaptado aos filtros, export PDF/Excel.
+- [x] Dashboard futurista (HUD escuro teal/ciano): KPIs (Faturamento, Lucro Líquido, Margem, Ticket Médio), P&L (donut Composição da Receita + Lucro Mensal Bruto vs Líquido), Controle de Produção (Na fila/Em produção/Finalizados + Top 5 produtos), Fluxo de Pedidos (recentes com badges + Volume 6 meses). Apenas dados reais.
+
 ## Próximas tarefas / Backlog
-### Fase 2 (P1) - próximo
+### Fase 3 (P1)
 - (concluído acima)
 ### Outros
 - P1: Upload de logo dinâmico via interface (atualmente fixo via URL)

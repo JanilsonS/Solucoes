@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, ArrowUpDown, FileText, FileSpreadsheet } from "lucide-react";
@@ -117,8 +117,8 @@ export default function ControlePedidos() {
                 const prodDisabled = p.status_pedido === "CANCELADO" || p.status_pedido === "ENTREGUE";
                 const open = expanded[p.id];
                 return (
-                  <>
-                    <tr key={p.id} data-testid={`cp-row-${p.numero}`}>
+                  <React.Fragment key={p.id}>
+                    <tr data-testid={`cp-row-${p.numero}`}>
                       <td><button data-testid={`cp-expand-${p.numero}`} onClick={() => setExpanded({ ...expanded, [p.id]: !open })} className="text-[#8B5E48]">{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
                       <td className="font-bold">{String(p.numero).padStart(3, "0")}</td>
                       <td>{p.cliente_nome}</td>
@@ -152,7 +152,7 @@ export default function ControlePedidos() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </React.Fragment>
                 );
               })}
             </tbody>

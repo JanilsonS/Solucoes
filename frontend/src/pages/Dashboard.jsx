@@ -75,7 +75,7 @@ export default function Dashboard() {
         <Title>Demonstrativo de Resultado (P&L)</Title>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div>
-            <div className="text-[11px] uppercase tracking-widest mb-2" style={{ color: C.text3 }}>Receita vs Custos (mês)</div>
+            <div className="text-[11px] uppercase tracking-widest mb-2" style={{ color: C.text3 }}>Composição da Receita (mês)</div>
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie data={d.receita_vs_custos} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={3} stroke="#041A25" strokeWidth={2}>
