@@ -25,7 +25,7 @@ export default function Compras() {
     if (!mp || editing.itens.some((i) => i.materia_prima_id === mid)) return;
     setEditing({ ...editing, itens: [...editing.itens, { materia_prima_id: mid, codigo: mp.codigo, descricao: mp.descricao, unidade: mp.unidade, marca: mp.marca, fornecedor: mp.fornecedor, quantidade: 1, valor_total: 0 }] });
   };
-  const upItem = (idx, field, v) => { const it = [...editing.itens]; it[idx] = { ...it[idx], [field]: Number(v) }; setEditing({ ...editing, itens: it }); };
+  const upItem = (idx, field, v) => { const it = [...editing.itens]; it[idx] = { ...it[idx], [field]: Number(v) || 0 }; setEditing({ ...editing, itens: it }); };
   const rmItem = (idx) => setEditing({ ...editing, itens: editing.itens.filter((_, i) => i !== idx) });
 
   const total = (editing?.itens || []).reduce((s, i) => s + Number(i.valor_total || 0), 0);
