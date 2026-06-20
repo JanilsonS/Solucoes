@@ -22,8 +22,8 @@ export default function MateriaPrima() {
     { name: "unidade", label: "Unidade" },
     { name: "marca", label: "Marca" },
     { name: "fornecedor", label: "Fornecedor" },
-    { name: "quantidade", label: "Quantidade", type: "number", decimals: 2 },
-    { name: "custo_total", label: "Custo Total (R$)", type: "number", decimals: 2 },
+    { name: "estoque_inicial_qtd", label: "Estoque Inicial (Qtd)", type: "number", decimals: 2 },
+    { name: "estoque_inicial_val", label: "Valor Inicial (R$)", type: "number", decimals: 2 },
     { name: "grupo_id", label: "Grupo" },
   ];
 
@@ -40,7 +40,11 @@ export default function MateriaPrima() {
       onDelete={(id) => api.delete(`/materias-primas/${id}`)}
       onReload={load}
       autoCodeType="materia_prima"
-      computedCols={[{ label: "Custo Unit.", value: (r) => r.custo_unitario || 0, decimals: 4 }]}
+      computedCols={[
+        { label: "Qtd Estoque", value: (r) => r.quantidade || 0, decimals: 2 },
+        { label: "Custo Total", value: (r) => r.custo_total || 0, decimals: 2 },
+        { label: "Custo Unit.", value: (r) => r.custo_unitario || 0, decimals: 4 },
+      ]}
     />
   );
 }

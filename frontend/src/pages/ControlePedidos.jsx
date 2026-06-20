@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { ChevronDown, ChevronRight, ArrowUpDown, FileText, FileSpreadsheet, MessageCircle } from "lucide-react";
-import { fmtBR, fmtMoney, exportPDF, exportCSV } from "@/lib/format";
+import { fmtBR, fmtMoney, fmtDate, exportPDF, exportCSV } from "@/lib/format";
 import { openWhatsapp } from "@/lib/whatsapp";
 
 const ST_PEDIDO = ["APROVADO", "ENTREGUE", "CANCELADO"];
@@ -28,12 +28,23 @@ export default function ControlePedidos() {
   const [sort, setSort] = useState({ key: "numero", dir: "desc" });
   const [expanded, setExpanded] = useState({});
   const [waTemplate, setWaTemplate] = useState("");
+  const [range, setRange] = useState({ ped_de: "", ped_ate: "", ent_de: "", ent_ate: "" });
 
   const load = async () => {
     const [{ data }, { data: cfg }] = await Promise.all([api.get("/pedidos"), api.get("/config")]);
     setPedidos(data); setWaTemplate(cfg.whatsapp_template || "");
   };
   useEffect(() => { load(); }, []);
+
+  const distinct = (key) => [...new Set(pedidos.map((p) => (p[key] ?? "").toString()).filter(Boolean))].sort();
+
+  const inRange = (d, de, ate) => {
+    if (!d) return !de && !ate;
+    const v = String(d).slice(0, 10);
+    if (de && v < de) return false;
+    if (ate && v > ate) return false;
+    return true;
+  };
 
   const setStatus = async (id, field, value) => {
     await api.patch(`/pedidos/${id}/status`, { [field]: value });
@@ -49,6 +60,8 @@ export default function ControlePedidos() {
         const v = (p[c.key] ?? "").toString().toLowerCase();
         if (!v.includes(f)) return false;
       }
+      if (!inRange(p.data_pedido, range.ped_de, range.ped_ate)) return false;
+      if (!inRange(p.data_entrega, range.ent_de, range.ent_ate)) return false;
       return true;
     });
     rows = [...rows].sort((a, b) => {
@@ -57,7 +70,7 @@ export default function ControlePedidos() {
       return sort.dir === "asc" ? cmp : -cmp;
     });
     return rows;
-  }, [pedidos, filters, sort]);
+  }, [pedidos, filters, sort, range]);
 
   const totalValor = filtered.reduce((s, p) => s + (p.total || 0), 0);
 
@@ -71,8 +84,8 @@ export default function ControlePedidos() {
       { label: "Status Pedido", value: (r) => r.status_pedido },
       { label: "Status Produção", value: (r) => PROD_LABEL[r.status_producao] || "" },
       { label: "Forma Pgto", value: (r) => r.forma_pagamento },
-      { label: "Data Pedido", value: (r) => r.data_pedido || "" },
-      { label: "Data Entrega", value: (r) => r.data_entrega || "" },
+      { label: "Data Pedido", value: (r) => fmtDate(r.data_pedido) },
+      { label: "Data Entrega", value: (r) => fmtDate(r.data_entrega) },
       { label: "Hora", value: (r) => r.hora_entrega || "" },
     ];
     return headers;
@@ -91,7 +104,21 @@ export default function ControlePedidos() {
         </div>
       </header>
 
+      <div className="mm-card-glow flex flex-wrap items-end gap-3" data-testid="cp-range-bar">
+        <div className="text-sm font-semibold text-[#3D2817]">Período:</div>
+        <div><label className="mm-label">Pedido — De</label><input data-testid="cp-range-ped-de" type="date" className="mm-input" value={range.ped_de} onChange={(e) => setRange({ ...range, ped_de: e.target.value })} /></div>
+        <div><label className="mm-label">Pedido — Até</label><input data-testid="cp-range-ped-ate" type="date" className="mm-input" value={range.ped_ate} onChange={(e) => setRange({ ...range, ped_ate: e.target.value })} /></div>
+        <div><label className="mm-label">Entrega — De</label><input data-testid="cp-range-ent-de" type="date" className="mm-input" value={range.ent_de} onChange={(e) => setRange({ ...range, ent_de: e.target.value })} /></div>
+        <div><label className="mm-label">Entrega — Até</label><input data-testid="cp-range-ent-ate" type="date" className="mm-input" value={range.ent_ate} onChange={(e) => setRange({ ...range, ent_ate: e.target.value })} /></div>
+        <button className="mm-btn-3d secondary text-sm" onClick={() => { setRange({ ped_de: "", ped_ate: "", ent_de: "", ent_ate: "" }); setFilters({}); }}>Limpar</button>
+      </div>
+
       <div className="mm-glass overflow-hidden">
+        {COLS.map((c) => (
+          <datalist key={c.key} id={`cp-dl-${c.key}`}>
+            {distinct(c.key).map((v) => <option key={v} value={c.key === "data_pedido" || c.key === "data_entrega" ? v : v} />)}
+          </datalist>
+        ))}
         <div className="overflow-x-auto max-h-[72vh]">
           <table className="mm-table">
             <thead>
@@ -110,7 +137,7 @@ export default function ControlePedidos() {
                 <th></th>
                 {COLS.map((c) => (
                   <th key={c.key}>
-                    <input data-testid={`cp-filter-${c.key}`} className="mm-input" style={{ padding: "3px 6px", fontSize: 12 }} placeholder="filtrar" value={filters[c.key] || ""} onChange={(e) => setFilters({ ...filters, [c.key]: e.target.value })} />
+                    <input data-testid={`cp-filter-${c.key}`} list={`cp-dl-${c.key}`} className="mm-input text-right" style={{ padding: "3px 6px", fontSize: 12 }} placeholder="filtrar" value={filters[c.key] || ""} onChange={(e) => setFilters({ ...filters, [c.key]: e.target.value })} />
                   </th>
                 ))}
                 <th></th>
@@ -139,9 +166,9 @@ export default function ControlePedidos() {
                         </select>
                       </td>
                       <td>{p.forma_pagamento || "—"}</td>
-                      <td>{p.data_pedido || "—"}</td>
-                      <td>{p.data_entrega || "—"}</td>
-                      <td>{p.hora_entrega || "—"}</td>
+                      <td className="text-right">{fmtDate(p.data_pedido)}</td>
+                      <td className="text-right">{fmtDate(p.data_entrega)}</td>
+                      <td className="text-right">{p.hora_entrega || "—"}</td>
                     </tr>
                     {open && (
                       <tr className="bg-[#FBF6F0]">

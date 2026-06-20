@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { Plus, Trash2, FileText, FileSpreadsheet, Pencil, X, UserPlus, MessageCircle } from "lucide-react";
-import { fmtBR, fmtMoney, exportPDF, exportCSV } from "@/lib/format";
+import { fmtBR, fmtMoney, fmtDate, exportPDF, exportCSV } from "@/lib/format";
 import { openWhatsapp } from "@/lib/whatsapp";
 
 const ST_PEDIDO = ["APROVADO", "ENTREGUE", "CANCELADO"];
@@ -25,12 +25,15 @@ export default function Pedidos() {
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [waTemplate, setWaTemplate] = useState("");
+  const [precoOficial, setPrecoOficial] = useState({});
 
   const load = async () => {
-    const [{ data: p }, { data: t }, { data: c }, { data: f }, { data: cfg }] = await Promise.all([
-      api.get("/pedidos"), api.get("/tabela-precos"), api.get("/clientes"), api.get("/formas-pagamento"), api.get("/config"),
+    const [{ data: p }, { data: t }, { data: c }, { data: f }, { data: cfg }, { data: tv }] = await Promise.all([
+      api.get("/pedidos"), api.get("/tabela-precos"), api.get("/clientes"), api.get("/formas-pagamento"), api.get("/config"), api.get("/tabela-venda"),
     ]);
     setPedidos(p); setTabela(t); setClientes(c); setFormas(f); setWaTemplate(cfg.whatsapp_template || "");
+    const pm = {}; (tv.rows || []).forEach((r) => { pm[r.produto_id] = r.preco_tabela; });
+    setPrecoOficial(pm);
   };
   useEffect(() => { load(); }, []);
 
@@ -64,7 +67,8 @@ export default function Pedidos() {
     const row = tabela.rows.find((r) => r.produto_id === produto_id);
     if (!row) return;
     if (editing.itens.some((i) => i.produto_id === produto_id)) return toast.error("Produto já adicionado");
-    setEditing({ ...editing, itens: [...editing.itens, { produto_id, codigo: row.codigo, descricao: row.descricao, unidade: row.unidade, quantidade: 1, custo_unitario: row.custo_com_perda, preco_unitario: row.preco_tabela_individual }] });
+    const preco = precoOficial[produto_id] != null ? precoOficial[produto_id] : row.preco_tabela_individual;
+    setEditing({ ...editing, itens: [...editing.itens, { produto_id, codigo: row.codigo, descricao: row.descricao, unidade: row.unidade, quantidade: 1, custo_unitario: row.custo_com_perda, preco_unitario: preco }] });
   };
   const updateQtd = (idx, value) => {
     const itens = [...editing.itens]; itens[idx] = { ...itens[idx], quantidade: Number(value) }; setEditing({ ...editing, itens });
@@ -123,7 +127,7 @@ export default function Pedidos() {
     const extra = `<strong>Pedido Nº:</strong> ${String(data.numero).padStart(3, "0")}<br/>
       <strong>Cliente:</strong> ${data.cliente_nome} • <strong>Fone:</strong> ${data.cliente_telefone || "—"}<br/>
       <strong>Entrega:</strong> ${data.endereco_entrega || data.cliente_endereco || "—"} ${data.ponto_referencia ? "(" + data.ponto_referencia + ")" : ""}<br/>
-      <strong>Data Pedido:</strong> ${data.data_pedido || "—"} • <strong>Entrega:</strong> ${data.data_entrega || "—"} ${data.hora_entrega || ""}<br/>
+      <strong>Data Pedido:</strong> ${fmtDate(data.data_pedido)} • <strong>Entrega:</strong> ${fmtDate(data.data_entrega)} ${data.hora_entrega || ""}<br/>
       <strong>Forma Pagamento:</strong> ${data.forma_pagamento || "—"}<br/>
       <strong>Total Produtos:</strong> ${fmtMoney(data.total_produtos)} • <strong>Outros:</strong> ${outros} (${fmtMoney(data.total_outros)})<br/>
       <strong style="font-size:16px;color:#6B8E5A;">TOTAL DO PEDIDO: ${fmtMoney(data.total)}</strong>`;
@@ -163,7 +167,7 @@ export default function Pedidos() {
                 <tr key={p.id} data-testid={`ped-row-${p.numero}`}>
                   <td className="font-bold">{String(p.numero).padStart(3, "0")}</td>
                   <td>{p.cliente_nome}</td>
-                  <td>{p.data_entrega || "—"} {p.hora_entrega || ""}</td>
+                  <td className="text-right">{fmtDate(p.data_entrega)} {p.hora_entrega || ""}</td>
                   <td>{p.status_pedido}</td>
                   <td>{PROD_LABEL[p.status_producao] || "—"}</td>
                   <td className="text-right font-bold">{fmtMoney(p.total)}</td>

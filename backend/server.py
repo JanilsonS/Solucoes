@@ -188,6 +188,8 @@ class MateriaPrimaIn(BaseModel):
     fornecedor: Optional[str] = ""
     quantidade: float = 0
     custo_total: float = 0
+    estoque_inicial_qtd: Optional[float] = None
+    estoque_inicial_val: Optional[float] = None
     grupo_id: Optional[str] = None
 
 
@@ -208,10 +210,14 @@ async def create_mp(data: MateriaPrimaIn, u=Depends(get_user)):
     if await db.materias_primas.find_one({"codigo": data.codigo}):
         raise HTTPException(400, "Código já existe")
     doc = {"id": new_id(), **data.model_dump(), "created_at": now_iso()}
+    if doc.get("estoque_inicial_qtd") is None:
+        doc["estoque_inicial_qtd"] = doc.get("quantidade", 0)
+        doc["estoque_inicial_val"] = doc.get("custo_total", 0)
     await db.materias_primas.insert_one(doc)
-    doc.pop("_id", None)
-    doc['custo_unitario'] = calc_custo_unit(doc['quantidade'], doc['custo_total'])
-    return doc
+    await recompute_mp_estoque()
+    fresh = await db.materias_primas.find_one({"id": doc["id"]}, {"_id": 0})
+    fresh['custo_unitario'] = calc_custo_unit(fresh.get('quantidade', 0), fresh.get('custo_total', 0))
+    return fresh
 
 
 @api.put("/materias-primas/{iid}")
@@ -221,7 +227,16 @@ async def update_mp(iid: str, data: MateriaPrimaIn, u=Depends(get_user)):
         raise HTTPException(404, "Não encontrado")
     if data.codigo != existing['codigo'] and await db.materias_primas.find_one({"codigo": data.codigo}):
         raise HTTPException(400, "Código já existe")
-    await db.materias_primas.update_one({"id": iid}, {"$set": data.model_dump()})
+    payload = data.model_dump()
+    # quantidade e custo_total são calculados pelo Movimento de MP (somente leitura no cadastro)
+    payload.pop("quantidade", None)
+    payload.pop("custo_total", None)
+    if payload.get("estoque_inicial_qtd") is None:
+        payload.pop("estoque_inicial_qtd", None)
+    if payload.get("estoque_inicial_val") is None:
+        payload.pop("estoque_inicial_val", None)
+    await db.materias_primas.update_one({"id": iid}, {"$set": payload})
+    await recompute_mp_estoque()
     return {"ok": True}
 
 
@@ -681,6 +696,36 @@ async def upsert_cliente(data: ClienteIn, u=Depends(get_user)):
     return doc
 
 
+# ====================== TABELA DE PREÇO DE VENDA (oficial, versionada) ======================
+@api.get("/tabela-venda")
+async def get_tabela_venda(u=Depends(get_user)):
+    doc = await db.tabela_venda.find_one({"id": "current"}, {"_id": 0})
+    return doc or {"id": "current", "data_base": None, "data_base_antiga": None, "rows": []}
+
+
+@api.post("/tabela-venda/atualizar")
+async def atualizar_tabela_venda(u=Depends(get_user)):
+    total_indices = await get_total_indices()
+    produtos = await db.produtos.find({"status": "ATIVO"}, {"_id": 0}).sort("codigo", 1).to_list(5000)
+    current = await db.tabela_venda.find_one({"id": "current"}, {"_id": 0}) or {}
+    old_rows = {r['produto_id']: r for r in current.get('rows', [])}
+    old_data_base = current.get('data_base')
+    new_rows = []
+    for p in produtos:
+        cu, preco = await produto_precos(p, total_indices)
+        prev = old_rows.get(p['id'])
+        preco_antigo = prev.get('preco_tabela') if prev else None
+        variacao = ((preco - preco_antigo) / preco_antigo * 100) if preco_antigo else None
+        new_rows.append({
+            "produto_id": p['id'], "codigo": p['codigo'], "descricao": p['descricao'],
+            "unidade": p['unidade'], "lucro_pct": p.get('lucro_pct_individual', 0),
+            "preco_tabela": preco, "preco_antigo": preco_antigo, "variacao_pct": variacao,
+        })
+    doc = {"id": "current", "data_base": now_iso(), "data_base_antiga": old_data_base, "rows": new_rows}
+    await db.tabela_venda.update_one({"id": "current"}, {"$set": doc}, upsert=True)
+    return doc
+
+
 # ====================== FORMAS DE PAGAMENTO ======================
 class FormaIn(BaseModel):
     nome: str
@@ -771,14 +816,16 @@ async def produto_precos(prod: dict, total_indices: float):
 
 async def build_pedido_totals(doc: dict) -> dict:
     total_indices = await get_total_indices()
+    tv = await db.tabela_venda.find_one({"id": "current"}, {"_id": 0})
+    preco_oficial = {r['produto_id']: r.get('preco_tabela', 0) for r in (tv or {}).get('rows', [])}
     for it in doc.get('itens', []):
         prod = await db.produtos.find_one({"id": it['produto_id']}, {"_id": 0})
         if prod:
             cu, pu = await produto_precos(prod, total_indices)
             it['custo_unitario'] = cu
-            it['preco_unitario'] = pu
-            it['custo_total'] = cu * it.get('quantidade', 0)
-            it['preco_total'] = pu * it.get('quantidade', 0)
+            it['preco_unitario'] = preco_oficial.get(it['produto_id'], pu)
+            it['custo_total'] = it['custo_unitario'] * it.get('quantidade', 0)
+            it['preco_total'] = it['preco_unitario'] * it.get('quantidade', 0)
     subtotal_produtos = sum(i.get('preco_total', 0) for i in doc.get('itens', []))
     desconto_val = subtotal_produtos * (doc.get('desconto_pct', 0) / 100)
     total_produtos = subtotal_produtos - desconto_val
@@ -846,6 +893,7 @@ async def create_pedido(data: PedidoIn, u=Depends(get_user)):
     doc = {"id": new_id(), "numero": num, **data.model_dump(), "created_at": now_iso()}
     doc = await build_pedido_totals(doc)
     await db.pedidos.insert_one(doc)
+    await recompute_mp_estoque()
     doc.pop("_id", None)
     return doc
 
@@ -859,6 +907,7 @@ async def update_pedido(pid: str, data: PedidoIn, u=Depends(get_user)):
     doc['numero'] = existing.get('numero')
     doc = await build_pedido_totals(doc)
     await db.pedidos.update_one({"id": pid}, {"$set": doc})
+    await recompute_mp_estoque()
     return {"ok": True}
 
 
@@ -876,6 +925,7 @@ async def update_status(pid: str, data: StatusUpdateIn, u=Depends(get_user)):
         upd['status_producao'] = data.status_producao
     if upd:
         await db.pedidos.update_one({"id": pid}, {"$set": upd})
+        await recompute_mp_estoque()
     return {"ok": True}
 
 
@@ -961,6 +1011,225 @@ async def dre(data_inicio: Optional[str] = None, data_fim: Optional[str] = None,
         "cpv": {"total": cpv_total, "detalhe": cpv},
         "resultado_bruto": resultado_bruto,
     }
+
+
+# ====================== COMPRAS & ESTOQUE ======================
+def _d(s):
+    return (s or "")[:10]
+
+
+async def mp_usage_map():
+    """{produto_id: {mp_id: qtd por unidade do produto}}"""
+    fichas = await db.fichas_tecnicas.find({}, {"_id": 0}).to_list(10000)
+    mp_ids = {m['id'] for m in await db.materias_primas.find({}, {"id": 1}).to_list(10000)}
+    usage = {}
+    for f in fichas:
+        pid = f.get('produto_id')
+        if not pid:
+            continue
+        d = {}
+        for it in f.get('items', []):
+            if it.get('tipo') in ("materia_prima", "confeito", "saborizacao", "embalagem") and it.get('ref_id') in mp_ids:
+                d[it['ref_id']] = d.get(it['ref_id'], 0) + it.get('quantidade', 0)
+        if d:
+            usage[pid] = d
+    return usage
+
+
+async def _est_inicial(mp):
+    """Garante baseline de estoque inicial (migra valores manuais atuais na 1ª vez)."""
+    if mp.get('estoque_inicial_qtd') is None:
+        eq = mp.get('quantidade', 0) or 0
+        ev = mp.get('custo_total', 0) or 0
+        await db.materias_primas.update_one({"id": mp['id']}, {"$set": {"estoque_inicial_qtd": eq, "estoque_inicial_val": ev}})
+        return eq, ev
+    return mp.get('estoque_inicial_qtd', 0) or 0, mp.get('estoque_inicial_val', 0) or 0
+
+
+async def _mp_movimentos(mid):
+    """Entradas (compras) e saídas (produção) para uma MP, lista de transações {data, tipo, qtd, val}."""
+    usage = await mp_usage_map()
+    trans = []
+    compras = await db.compras.find({}, {"_id": 0}).to_list(20000)
+    for c in compras:
+        for it in c.get('itens', []):
+            if it['materia_prima_id'] == mid:
+                trans.append({"data": _d(c.get('data_compra') or c.get('created_at')), "tipo": "E", "qtd": it.get('quantidade', 0), "val": it.get('valor_total', 0)})
+    pedidos = await db.pedidos.find({"status_producao": "EM_PRODUCAO", "status_pedido": {"$ne": "CANCELADO"}}, {"_id": 0}).to_list(20000)
+    for p in pedidos:
+        sq = 0
+        for it in p.get('itens', []):
+            q = usage.get(it['produto_id'], {}).get(mid, 0)
+            sq += q * it.get('quantidade', 0)
+        if sq:
+            trans.append({"data": _d(p.get('data_pedido') or p.get('created_at')), "tipo": "S", "qtd": sq, "val": 0})
+    return trans
+
+
+async def recompute_mp_estoque():
+    """Atualiza quantidade/custo_total de cada MP = estoque inicial + entradas - saídas (custo médio)."""
+    usage = await mp_usage_map()
+    compras = await db.compras.find({}, {"_id": 0}).to_list(20000)
+    pedidos = await db.pedidos.find({"status_producao": "EM_PRODUCAO", "status_pedido": {"$ne": "CANCELADO"}}, {"_id": 0}).to_list(20000)
+    ent_q, ent_v, sai_q = {}, {}, {}
+    for c in compras:
+        for it in c.get('itens', []):
+            mid = it['materia_prima_id']
+            ent_q[mid] = ent_q.get(mid, 0) + it.get('quantidade', 0)
+            ent_v[mid] = ent_v.get(mid, 0) + it.get('valor_total', 0)
+    for p in pedidos:
+        for it in p.get('itens', []):
+            for mid, q in usage.get(it['produto_id'], {}).items():
+                sai_q[mid] = sai_q.get(mid, 0) + q * it.get('quantidade', 0)
+    mps = await db.materias_primas.find({}, {"_id": 0}).to_list(10000)
+    for mp in mps:
+        mid = mp['id']
+        eiq, eiv = await _est_inicial(mp)
+        eq, ev, sq = ent_q.get(mid, 0), ent_v.get(mid, 0), sai_q.get(mid, 0)
+        avg = ((eiv + ev) / (eiq + eq)) if (eiq + eq) else 0
+        qtd_final = eiq + eq - sq
+        val_final = avg * qtd_final
+        await db.materias_primas.update_one({"id": mid}, {"$set": {"quantidade": qtd_final, "custo_total": val_final}})
+
+
+# ---- Pedido de Compras ----
+class CompraItemIn(BaseModel):
+    materia_prima_id: str
+    quantidade: float = 0
+    valor_total: float = 0
+
+
+class CompraIn(BaseModel):
+    fornecedor: str = ""
+    data_compra: Optional[str] = None
+    data_vencimento: Optional[str] = None
+    itens: List[CompraItemIn] = []
+
+
+async def next_compra_code():
+    counter = await db.counters.find_one_and_update({"_id": "compra"}, {"$inc": {"seq": 1}}, upsert=True, return_document=True)
+    return f"CP{counter.get('seq', 1):03d}"
+
+
+async def _enrich_compra(c):
+    total = 0
+    for it in c.get('itens', []):
+        mp = await db.materias_primas.find_one({"id": it['materia_prima_id']}, {"_id": 0})
+        if mp:
+            it['codigo'] = mp['codigo']; it['descricao'] = mp['descricao']
+            it['unidade'] = mp['unidade']; it['marca'] = mp.get('marca', '')
+            it['fornecedor'] = mp.get('fornecedor', '')
+        total += it.get('valor_total', 0)
+    c['total_pedido'] = total
+    return c
+
+
+@api.get("/compras")
+async def list_compras(u=Depends(get_user)):
+    items = await db.compras.find({}, {"_id": 0}).sort("codigo", -1).to_list(5000)
+    for c in items:
+        await _enrich_compra(c)
+    return items
+
+
+@api.get("/compras/{cid}")
+async def get_compra(cid: str, u=Depends(get_user)):
+    c = await db.compras.find_one({"id": cid}, {"_id": 0})
+    if not c:
+        raise HTTPException(404, "Não encontrado")
+    return await _enrich_compra(c)
+
+
+@api.post("/compras")
+async def create_compra(data: CompraIn, u=Depends(get_user)):
+    code = await next_compra_code()
+    doc = {"id": new_id(), "codigo": code, **data.model_dump(), "created_at": now_iso()}
+    if not doc.get('data_compra'):
+        doc['data_compra'] = now_iso()[:10]
+    doc['total_pedido'] = sum(i.get('valor_total', 0) for i in doc['itens'])
+    await db.compras.insert_one(doc)
+    await recompute_mp_estoque()
+    doc.pop("_id", None)
+    return await _enrich_compra(doc)
+
+
+@api.put("/compras/{cid}")
+async def update_compra(cid: str, data: CompraIn, u=Depends(get_user)):
+    existing = await db.compras.find_one({"id": cid})
+    if not existing:
+        raise HTTPException(404, "Não encontrado")
+    doc = data.model_dump()
+    doc['total_pedido'] = sum(i.get('valor_total', 0) for i in doc['itens'])
+    await db.compras.update_one({"id": cid}, {"$set": doc})
+    await recompute_mp_estoque()
+    return {"ok": True}
+
+
+@api.delete("/compras/{cid}")
+async def delete_compra(cid: str, u=Depends(get_user)):
+    await db.compras.delete_one({"id": cid})
+    await recompute_mp_estoque()
+    return {"ok": True}
+
+
+# ---- Movimento de Matéria-Prima ----
+@api.get("/movimento-mp")
+async def movimento_mp(materia_prima_id: str = Query(...), de: Optional[str] = Query(None), ate: Optional[str] = Query(None),
+                       saldo_inicial_qtd: Optional[float] = Query(None), saldo_inicial_val: Optional[float] = Query(None), u=Depends(get_user)):
+    mp = await db.materias_primas.find_one({"id": materia_prima_id}, {"_id": 0})
+    if not mp:
+        raise HTTPException(404, "MP não encontrada")
+    eiq, eiv = await _est_inicial(mp)
+    q_saldo = saldo_inicial_qtd if saldo_inicial_qtd is not None else eiq
+    v_saldo = saldo_inicial_val if saldo_inicial_val is not None else eiv
+    trans = await _mp_movimentos(materia_prima_id)
+    # filtro por período
+    if de:
+        trans = [t for t in trans if t['data'] >= de]
+    if ate:
+        trans = [t for t in trans if t['data'] <= ate]
+    # agrupar por data
+    datas = sorted({t['data'] for t in trans if t['data']})
+    linhas = []
+    for dt in datas:
+        eq = sum(t['qtd'] for t in trans if t['data'] == dt and t['tipo'] == 'E')
+        evv = sum(t['val'] for t in trans if t['data'] == dt and t['tipo'] == 'E')
+        sq = sum(t['qtd'] for t in trans if t['data'] == dt and t['tipo'] == 'S')
+        q_ini, v_ini = q_saldo, v_saldo
+        avg = ((v_ini + evv) / (q_ini + eq)) if (q_ini + eq) else 0
+        sv = avg * sq
+        q_fim = q_ini + eq - sq
+        v_fim = v_ini + evv - sv
+        linhas.append({"data": dt, "q_inicial": q_ini, "q_entrada": eq, "q_saida": sq, "q_final": q_fim,
+                       "v_inicial": v_ini, "v_entrada": evv, "v_saida": sv, "v_final": v_fim})
+        q_saldo, v_saldo = q_fim, v_fim
+    return {"materia_prima": {"codigo": mp['codigo'], "descricao": mp['descricao'], "unidade": mp['unidade']},
+            "saldo_inicial_qtd": eiq, "saldo_inicial_val": eiv, "linhas": linhas,
+            "saldo_final_qtd": q_saldo, "saldo_final_val": v_saldo}
+
+
+# ---- Gestão de Estoques ----
+@api.get("/estoques")
+async def gestao_estoques(modo: str = Query("todos"), u=Depends(get_user)):
+    await recompute_mp_estoque()
+    usage = await mp_usage_map()
+    filtro = {"status_pedido": {"$nin": ["CANCELADO"]}}
+    if modo == "producao":
+        filtro["status_producao"] = "EM_PRODUCAO"
+    pedidos = await db.pedidos.find(filtro, {"_id": 0}).to_list(20000)
+    necessidade = {}
+    for p in pedidos:
+        for it in p.get('itens', []):
+            for mid, q in usage.get(it['produto_id'], {}).items():
+                necessidade[mid] = necessidade.get(mid, 0) + q * it.get('quantidade', 0)
+    mps = await db.materias_primas.find({}, {"_id": 0}).sort("codigo", 1).to_list(10000)
+    rows = []
+    for mp in mps:
+        estoque = mp.get('quantidade', 0) or 0
+        nec = necessidade.get(mp['id'], 0)
+        rows.append({"id": mp['id'], "codigo": mp['codigo'], "descricao": mp['descricao'], "unidade": mp['unidade'],
+                     "estoque_atual": estoque, "necessidade": nec, "saldo": estoque - nec})
+    return {"modo": modo, "rows": rows}
 
 
 # ====================== DASHBOARD ======================

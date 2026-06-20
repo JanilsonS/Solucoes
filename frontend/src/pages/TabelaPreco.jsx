@@ -1,13 +1,25 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
-import { FileText, FileSpreadsheet } from "lucide-react";
+import { FileText, FileSpreadsheet, RefreshCw } from "lucide-react";
 import { fmtBR, fmtMoney, exportPDF, exportCSV } from "@/lib/format";
 
 export default function TabelaPreco() {
   const [data, setData] = useState(null);
   const [perda, setPerda] = useState({});
   const [lucroInd, setLucroInd] = useState({});
+  const [confirmAtu, setConfirmAtu] = useState(false);
+  const [atualizando, setAtualizando] = useState(false);
+
+  const atualizarVenda = async () => {
+    setAtualizando(true);
+    try {
+      await api.post("/tabela-venda/atualizar");
+      toast.success("Tabela de Preço de Venda atualizada!");
+      setConfirmAtu(false);
+    } catch (e) { toast.error(e.response?.data?.detail || "Erro ao atualizar"); }
+    finally { setAtualizando(false); }
+  };
 
   const load = async () => {
     const { data } = await api.get("/tabela-precos");
@@ -59,14 +71,29 @@ export default function TabelaPreco() {
     <div className="space-y-5">
       <header className="flex justify-between items-center flex-wrap gap-3">
         <div>
-          <h1 className="font-display text-4xl text-[#3D2817]">Tabela de Preço de Venda</h1>
+          <h1 className="font-display text-4xl text-[#3D2817]">Precificação</h1>
           <p className="text-[#8B5E48] italic text-sm">Apenas produtos ativos • Índices total: {fmtBR(data.total_indices_pct)}%</p>
         </div>
         <div className="flex gap-2">
-          <button data-testid="tp-export-excel" className="mm-btn-3d secondary flex items-center gap-1" onClick={() => exportCSV(data.rows, headers, "tabela-precos.csv")}><FileSpreadsheet size={16}/>Excel</button>
-          <button data-testid="tp-export-pdf" className="mm-btn-3d secondary flex items-center gap-1" onClick={() => exportPDF("Tabela de Preço de Venda", headers, data.rows)}><FileText size={16}/>PDF</button>
+          <button data-testid="tp-atualizar-venda" className="mm-btn-3d flex items-center gap-1" onClick={() => setConfirmAtu(true)}><RefreshCw size={16}/>Atualizar Tabela de Venda</button>
+          <button data-testid="tp-export-excel" className="mm-btn-3d secondary flex items-center gap-1" onClick={() => exportCSV(data.rows, headers, "precificacao.csv")}><FileSpreadsheet size={16}/>Excel</button>
+          <button data-testid="tp-export-pdf" className="mm-btn-3d secondary flex items-center gap-1" onClick={() => exportPDF("Precificação", headers, data.rows)}><FileText size={16}/>PDF</button>
         </div>
       </header>
+
+      {confirmAtu && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" data-testid="tp-confirm-dialog">
+          <div className="mm-glass max-w-md w-full p-6 text-center">
+            <RefreshCw size={40} className="mx-auto text-[#C8856A] mb-3" />
+            <h2 className="font-display text-2xl text-[#3D2817] mb-2">Atualizar Tabela de Venda?</h2>
+            <p className="text-[#8B5E48] text-sm mb-5">Os preços atuais serão copiados para "Tabela Antiga" e substituídos pelos novos valores da Precificação. Esta ação atualiza a tabela oficial de preços praticada.</p>
+            <div className="flex gap-2 justify-center">
+              <button className="mm-btn-3d secondary" onClick={() => setConfirmAtu(false)}>Cancelar</button>
+              <button data-testid="tp-confirm-atualizar" className="mm-btn-3d" disabled={atualizando} onClick={atualizarVenda}>{atualizando ? "Atualizando..." : "Sim, atualizar"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mm-glass overflow-hidden">
         <div className="overflow-x-auto max-h-[75vh]">

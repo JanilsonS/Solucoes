@@ -16,6 +16,11 @@ import Pedidos from "@/pages/Pedidos";
 import ControlePedidos from "@/pages/ControlePedidos";
 import DRE from "@/pages/DRE";
 import Configuracoes from "@/pages/Configuracoes";
+import EmBreve from "@/pages/EmBreve";
+import TabelaVenda from "@/pages/TabelaVenda";
+import Compras from "@/pages/Compras";
+import MovimentoMP from "@/pages/MovimentoMP";
+import Estoques from "@/pages/Estoques";
 import ControleProducao from "@/pages/ControleProducao";
 import FichaDetalhada from "@/pages/FichaDetalhada";
 
@@ -54,6 +59,11 @@ function App() {
             <Route path="ficha-detalhada" element={<FichaDetalhada />} />
             <Route path="dre" element={<DRE />} />
             <Route path="configuracoes" element={<Configuracoes />} />
+            <Route path="tabela-venda" element={<TabelaVenda />} />
+            <Route path="compras" element={<Compras />} />
+            <Route path="movimento-mp" element={<MovimentoMP />} />
+            <Route path="estoques" element={<Estoques />} />
+            <Route path="manual" element={<EmBreve titulo="Manual do Usuário" />} />
           </Route>
         </Routes>
       </BrowserRouter>

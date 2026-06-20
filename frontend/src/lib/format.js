@@ -12,6 +12,13 @@ export const fmtMoney = (n) => `R$ ${fmtBR(n, 2)}`;
 export const fmtPct = (n) => `${fmtBR(n, 2)}%`;
 export const fmtQty4 = (n) => fmtBR(n, 4);
 
+export const fmtDate = (d) => {
+  if (!d) return "—";
+  const part = String(d).length >= 10 ? String(d).slice(0, 10) : String(d);
+  const [y, m, dd] = part.split("-");
+  return dd ? `${dd}/${m}/${y}` : d;
+};
+
 export const parseBR = (s) => {
   if (typeof s === "number") return s;
   if (!s) return 0;

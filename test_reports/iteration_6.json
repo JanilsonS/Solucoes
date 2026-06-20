@@ -1,0 +1,31 @@
+{
+  "summary": "Fase 4 Lote C fully verified end-to-end: Pedido de Compras CRUD with auto-fill of MP fields and TOTAL DO PEDIDO; MP cadastro converted to read-only computed quantidade/custo_total/custo_unitario with editable Estoque Inicial (Qtd) + Valor Inicial (R$); Movimento de MP returns per-date lines with QUANTIDADE (Inicial/Entradas/Saídas/Final) and VALORES (Inicial/Entradas/Saídas/Final) on the SAME row with 4-decimal qty; Gestão de Estoques returns 19 rows in both 'todos' and 'producao' modes, sortable by Saldo, with the negative-saldo row (MP011 -90,0000) rendered with red background + white text.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_fase4_lote_c.py",
+    "/app/test_reports/pytest/fase4_lote_c.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Estoques.jsx: red highlight uses inline `style={{ background: '#B85450' }}`. React serializes to `rgb(184,84,80)`, so CSS selectors like `td[style*=\"B85450\"]` won't match in tests. Consider an explicit className (e.g. mm-negative) for testability. Visually it renders correctly.",
+    "Compras.jsx: addItem rejects duplicate MP silently (returns early when materia_prima_id already in itens). UX-wise could show a toast 'MP já adicionada'. Minor.",
+    "Compras.jsx upItem: `Number(v)` is used for both quantidade and valor_total — if user clears the input it becomes NaN. Coalesce: `Number(v) || 0`.",
+    "MovimentoMP.jsx: when select changes, data is cleared (good) but si_qtd/si_val carry over from previous MP — could mislead user. Reset params on MP change.",
+    "server.py /estoques: calls recompute_mp_estoque() every request which iterates all compras + pedidos; for large datasets this becomes O(N×M). Consider caching or recomputing only on writes."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_fase4_lote_c.py"
+  ],
+  "success_rate": {"backend": "100% (10/10)", "frontend": "100% (16/16 — 1 selector false-negative, feature verified visually)"},
+  "test_credentials": "admin@mm.com / mm123456 (verified)",
+  "seed_data_creation": "Created and deleted 1 TEST_ compra (auto-code CP00x) during create→update→delete round-trip; created and deleted 1 TEST_MP01 to verify estoque_inicial path. Counter for compras was incremented by 2 (test cases + UI run) — non-destructive.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All Lote C endpoints+pages are green. Verified flows: (1) Login admin@mm.com/mm123456. (2) /compras shows seed CP001 + 'Nova Compra' modal: compra-fornecedor/data/compra-vencimento, compra-add-mp populates a row with codigo/descricao/unidade/marca/fornecedor auto-filled, compra-item-qtd-0 / compra-item-valor-0 editable, compra-total computes sum live, compra-save persists with auto code CP002+, list updates, edit/delete work, MP estoque increases on save and reverts on delete (verified via backend). (3) /materia-prima form has 'Estoque Inicial (Qtd)' + 'Valor Inicial (R$)' (no editable Quantidade/Custo Total), table now shows computed cols 'Qtd Estoque' / 'Custo Total' / 'Custo Unit.'; existing MPs have valid custo_unitario (recipe costs unaffected). POST with estoque_inicial=10/50 produces quantidade=10 custo_total=50 custo_unitario=5. (4) /movimento-mp: mov-mp-select shows all 19 MPs, mov-consultar returns mov-table with 2 columns groups QUANTIDADE/VALORES and 9 td per row (Data + 4 qty + 4 val); MP001 Açucar cristal shows 15/06/2026 entry 5.000 + 20/06/2026 entry +100 (compra), Saldo Final 4.650,0000 un / R$ 265,46. (5) /estoques: 19 rows in both modes, 'producao' has MP011 Essência de caramelo with Saldo -90,0000 rendered RED. est-sort-saldo toggles asc/desc (verified before -90 / after 5.000). (6) Total backend tests: 10/10 pass. /api/compras (GET/POST/PUT/DELETE), /api/movimento-mp, /api/estoques?modo=todos|producao all verified. Manual do Usuário (/manual) is still placeholder (Lote D, not in scope).",
+  "rca of the issue": "No bugs found. The single test that reported FAIL (est_red_negative selector) was a false negative due to React converting inline-style hex `#B85450` to `rgb(184,84,80)`; the screenshot of /estoques?modo=producao confirms MP011's row is rendered with the red background and white text as specified."
+}
