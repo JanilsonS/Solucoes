@@ -24,12 +24,13 @@ export default function Pedidos() {
   const [formas, setFormas] = useState([]);
   const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [waTemplate, setWaTemplate] = useState("");
 
   const load = async () => {
-    const [{ data: p }, { data: t }, { data: c }, { data: f }] = await Promise.all([
-      api.get("/pedidos"), api.get("/tabela-precos"), api.get("/clientes"), api.get("/formas-pagamento"),
+    const [{ data: p }, { data: t }, { data: c }, { data: f }, { data: cfg }] = await Promise.all([
+      api.get("/pedidos"), api.get("/tabela-precos"), api.get("/clientes"), api.get("/formas-pagamento"), api.get("/config"),
     ]);
-    setPedidos(p); setTabela(t); setClientes(c); setFormas(f);
+    setPedidos(p); setTabela(t); setClientes(c); setFormas(f); setWaTemplate(cfg.whatsapp_template || "");
   };
   useEffect(() => { load(); }, []);
 
@@ -168,7 +169,7 @@ export default function Pedidos() {
                   <td className="text-right font-bold">{fmtMoney(p.total)}</td>
                   <td className="whitespace-nowrap">
                     <button data-testid={`ped-edit-${p.numero}`} onClick={() => openEdit(p.id)} className="text-[#8B5E48] mr-2"><Pencil size={16} /></button>
-                    <button data-testid={`ped-whats-${p.numero}`} title="Enviar no WhatsApp" onClick={() => openWhatsapp(p)} className="text-[#25D366] mr-2"><MessageCircle size={16} /></button>
+                    <button data-testid={`ped-whats-${p.numero}`} title="Enviar no WhatsApp" onClick={() => openWhatsapp(p, waTemplate)} className="text-[#25D366] mr-2"><MessageCircle size={16} /></button>
                     <button onClick={() => exportPDF_(p.id)} className="text-[#8B5E48] mr-2"><FileText size={16} /></button>
                     <button onClick={() => exportExcel_(p.id)} className="text-[#8B5E48] mr-2"><FileSpreadsheet size={16} /></button>
                     <button onClick={() => del(p.id)} className="text-[#B85450]"><Trash2 size={16} /></button>

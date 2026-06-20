@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { LOGO_URL } from "@/lib/api";
 import {
   LayoutDashboard, Package, Wrench, Receipt, Cake, Calculator,
-  FileText, Tags, ShoppingCart, TrendingUp, LogOut, Factory, Sparkles, ClipboardList,
+  FileText, Tags, ShoppingCart, TrendingUp, LogOut, Factory, Sparkles, ClipboardList, Settings,
 } from "lucide-react";
 
 const NAV = [
@@ -19,6 +19,7 @@ const NAV = [
   { to: "/controle-pedidos", label: "Controle de Pedidos", icon: ClipboardList, tid: "nav-controle-pedidos" },
   { to: "/producao", label: "Controle de Produção", icon: Factory, tid: "nav-producao" },
   { to: "/dre", label: "DRE", icon: TrendingUp, tid: "nav-dre" },
+  { to: "/configuracoes", label: "Configurações", icon: Settings, tid: "nav-config" },
 ];
 
 export default function Layout() {

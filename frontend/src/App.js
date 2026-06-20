@@ -15,6 +15,7 @@ import TabelaPreco from "@/pages/TabelaPreco";
 import Pedidos from "@/pages/Pedidos";
 import ControlePedidos from "@/pages/ControlePedidos";
 import DRE from "@/pages/DRE";
+import Configuracoes from "@/pages/Configuracoes";
 import ControleProducao from "@/pages/ControleProducao";
 import FichaDetalhada from "@/pages/FichaDetalhada";
 
@@ -52,6 +53,7 @@ function App() {
             <Route path="producao" element={<ControleProducao />} />
             <Route path="ficha-detalhada" element={<FichaDetalhada />} />
             <Route path="dre" element={<DRE />} />
+            <Route path="configuracoes" element={<Configuracoes />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -301,22 +301,46 @@ async def get_horas_mes_global() -> float:
     return (cfg or {}).get("horas_mes_global", 220) or 0
 
 
+DEFAULT_WHATSAPP_TEMPLATE = (
+    "Olá, {cliente}! 🎂\n"
+    "Confirmação do seu pedido nº {numero} — *MM Confeitaria & Eventos*\n"
+    "\n"
+    "{itens}\n"
+    "{outros}"
+    "\n"
+    "*Total do pedido: {total}*\n"
+    "📅 Entrega: {entrega}\n"
+    "📍 {endereco}\n"
+    "💳 Pagamento: {forma_pagamento}\n"
+    "\n"
+    "Qualquer dúvida, estou à disposição! 💕"
+)
+
+
 @api.get("/config")
 async def get_config(u=Depends(get_user)):
     cfg = await db.configuracoes.find_one({"id": "global"}, {"_id": 0})
     if not cfg:
-        cfg = {"id": "global", "horas_mes_global": 220}
+        cfg = {"id": "global"}
+    cfg.setdefault("horas_mes_global", 220)
+    cfg.setdefault("whatsapp_template", DEFAULT_WHATSAPP_TEMPLATE)
     return cfg
 
 
 class ConfigIn(BaseModel):
-    horas_mes_global: float = 220
+    horas_mes_global: Optional[float] = None
+    whatsapp_template: Optional[str] = None
 
 
 @api.put("/config")
 async def update_config(data: ConfigIn, u=Depends(get_user)):
-    await db.configuracoes.update_one({"id": "global"}, {"$set": {"id": "global", "horas_mes_global": data.horas_mes_global}}, upsert=True)
-    return {"ok": True, "horas_mes_global": data.horas_mes_global}
+    upd = {"id": "global"}
+    if data.horas_mes_global is not None:
+        upd["horas_mes_global"] = data.horas_mes_global
+    if data.whatsapp_template is not None:
+        upd["whatsapp_template"] = data.whatsapp_template
+    await db.configuracoes.update_one({"id": "global"}, {"$set": upd}, upsert=True)
+    return {"ok": True}
 
 
 @api.get("/custos")

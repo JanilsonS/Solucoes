@@ -1,0 +1,31 @@
+{
+  "summary": "Verified the new WhatsApp feature end-to-end: Configurações page (template editor + live preview + token chips + save/persist) and the green WhatsApp buttons on Cadastro de Pedidos (/pedidos) and Controle de Pedidos (/controle-pedidos). Backend PUT /api/config now merges partial fields and does NOT wipe horas_mes_global. Frontend buttons open https://wa.me/55... URLs with the message generated from the saved template (verified by overriding window.open and decoding text param). Custom template saved in Configurações IS reflected in the message generated from the CP WhatsApp button.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Configurações", "issues": ["'Restaurar padrão' button is missing a data-testid (only wa-save-btn has one). Cosmetic; was not in the spec but would help future automation."]},
+      {"screen": "Pedidos & Controle de Pedidos rows", "issues": ["The seed cliente_telefone values are short (e.g. '4793'), so wa.me URLs become wa.me/554793 — not a code bug, but seed data is invalid for real WhatsApp. Consider seeding 11-digit BR numbers (e.g. 47999990000)."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_5.json"],
+  "action_items": [
+    "(Optional) add data-testid to the 'Restaurar padrão' button on Configurações.",
+    "(Optional) update seed orders cliente_telefone to full 11-digit BR mobile numbers so generated wa.me links are valid."
+  ],
+  "critical_code_review_comments": [
+    "Configuracoes.jsx: token-chip onClick uses `setTemplate(template + t)` reading stale closure — for fast successive clicks it can drop tokens; use the functional form setTemplate(prev => prev + t). Minor.",
+    "whatsapp.js openWhatsapp: when cliente_telefone is empty the link is opened with no number (https://wa.me/?text=...). That works but UX-wise consider disabling the button or warning the user. Minor.",
+    "Backend PUT /api/config correctly merges partial fields (verified: PUT {whatsapp_template:'...'} kept horas_mes_global=140).",
+    "Pedidos.jsx & ControlePedidos.jsx both fetch /api/config independently to get waTemplate — fine for now but a shared store/context would avoid duplicate requests across pages."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@mm.com / mm123456 (verified)",
+  "seed_data_creation": "None. Saved a temporary 'CUSTOM-TPL ...' whatsapp_template via Configurações then RESTORED the default template via PUT /api/config before finishing. horas_mes_global preserved at 140 throughout.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase WhatsApp feature is fully green. Verified flows: (1) Login admin@mm.com/mm123456 (note backend expects field 'password', not 'senha'). (2) /configuracoes renders wa-template-input pre-filled with default template containing {cliente}, {numero}, {itens}, {outros}, {total}, {entrega}, {endereco}, {forma_pagamento}; wa-preview live-renders with SAMPLE (Maria Silva / 001 / R$ 185,50 / 05/07/2026 às 15:00); token chips append; wa-save-btn PUTs /api/config and shows toast; reload preserves the saved text; horas_mes_global stays 140. (3) /pedidos rows have ped-whats-<numero> green buttons (seen for 7, 6, 5). (4) /controle-pedidos rows have cp-whats-<numero> next to expand chevron. (5) Clicking either button calls window.open('https://wa.me/55<digits>?text=<urlencoded msg>') — verified by overriding window.open and decoding the text param. Default template produces 'Olá, Ana Lima! 🎂\\nConfirmação do seu pedido nº 007 — *MM Confeitaria & Eventos*\\n• 2x Pipoca Caramelizada Tradicional\\n*Outros:*\\n• Carrinho Gourmet: R$ 50,00\\n*Total do pedido: R$ 70,13*\\n📅 Entrega: 28/06/2026 às 16:30\\n📍 a combinar\\n💳 Pagamento: Cartão de Crédito ...'. Custom template saved via Configurações IS applied to CP button (verified 'CUSTOM-TPL Ana Lima #007 = R$ 70,13'). Default template restored at end of run. 3 seed pedidos (005 Maria Silva, 006 João Costa, 007 Ana Lima) — telefones in seed are short (4-digit), so wa.me URLs look like wa.me/554793; this is seed data, not a code bug.",
+  "rca of the issue": "No bugs. Feature works as specified."
+}

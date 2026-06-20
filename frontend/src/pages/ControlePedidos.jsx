@@ -27,8 +27,12 @@ export default function ControlePedidos() {
   const [filters, setFilters] = useState({});
   const [sort, setSort] = useState({ key: "numero", dir: "desc" });
   const [expanded, setExpanded] = useState({});
+  const [waTemplate, setWaTemplate] = useState("");
 
-  const load = async () => { const { data } = await api.get("/pedidos"); setPedidos(data); };
+  const load = async () => {
+    const [{ data }, { data: cfg }] = await Promise.all([api.get("/pedidos"), api.get("/config")]);
+    setPedidos(data); setWaTemplate(cfg.whatsapp_template || "");
+  };
   useEffect(() => { load(); }, []);
 
   const setStatus = async (id, field, value) => {
@@ -120,7 +124,7 @@ export default function ControlePedidos() {
                 return (
                   <React.Fragment key={p.id}>
                     <tr data-testid={`cp-row-${p.numero}`}>
-                      <td><div className="flex items-center gap-1"><button data-testid={`cp-expand-${p.numero}`} onClick={() => setExpanded({ ...expanded, [p.id]: !open })} className="text-[#8B5E48]">{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button><button data-testid={`cp-whats-${p.numero}`} title="Enviar no WhatsApp" onClick={() => openWhatsapp(p)} className="text-[#25D366]"><MessageCircle size={16} /></button></div></td>
+                      <td><div className="flex items-center gap-1"><button data-testid={`cp-expand-${p.numero}`} onClick={() => setExpanded({ ...expanded, [p.id]: !open })} className="text-[#8B5E48]">{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button><button data-testid={`cp-whats-${p.numero}`} title="Enviar no WhatsApp" onClick={() => openWhatsapp(p, waTemplate)} className="text-[#25D366]"><MessageCircle size={16} /></button></div></td>
                       <td className="font-bold">{String(p.numero).padStart(3, "0")}</td>
                       <td>{p.cliente_nome}</td>
                       <td className="font-bold text-right">{fmtMoney(p.total)}</td>
