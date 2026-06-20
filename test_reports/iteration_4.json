@@ -1,0 +1,33 @@
+{
+  "summary": "FASE 3 e2e validation: Cadastro de Pedidos (modal w/ cliente auto-fill, forma-pagamento select, add produto with custo/preço from tabela cols 13/15, qty editable, outros editable, DRE live, save), Controle de Pedidos (table, filter, sort, expand, status patches with status_producao disabling logic when status_pedido is CANCELADO/ENTREGUE), and Dashboard Futurista (HUD, 4 KPIs, P&L donut + ComposedChart, Produção stats + Top 5, Fluxo de Pedidos + Volume chart). Backend pytest 6/6 PASS. UI 100% verified end-to-end with the seeded data + a new pedido (Receita R$27,17, Resultado R$-0,91, Total R$37,17 after outros=10) which was then cleaned up via DELETE.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Controle de Pedidos table", "issues": ["React console warning 'Each child in a list should have a unique \"key\" prop' originating from ControlePedidos.jsx — the <>...</> Fragment used to wrap the main row plus the expanded detail row inside .map() has no key. Use React.Fragment with key={p.id} (or two adjacent <tr key=...>) to silence the warning. Functional, but pollutes console."]},
+      {"screen": "Dashboard P&L donut", "issues": ["Section is titled 'RECEITA VS CUSTOS' but the slices supplied by GET /api/dashboard.receita_vs_custos are Lucro Líquido, Custo Produtos and Deduções (no actual Receita slice). The composition still adds up to receita, but the label may mislead. Optional: rename the panel header to 'Composição da Receita' or add a Receita slice."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_pedidos_dashboard.py", "/app/test_reports/pytest/pedidos_dashboard_results.xml"],
+  "action_items": [
+    "Add key prop to the Fragment in ControlePedidos.jsx around the row + expanded-detail pair (use <React.Fragment key={p.id}> instead of <>).",
+    "(Optional) clarify donut label on Dashboard ('Receita vs Custos' is composed of Lucro Líquido + Custo + Deduções)."
+  ],
+  "critical_code_review_comments": [
+    "ControlePedidos.jsx uses <></> Fragment as immediate child of <tbody> inside .map() — React warns about missing key. Should be React.Fragment with key.",
+    "Pedidos.jsx PUT /pedidos/{id} payload still includes status_pedido/status_producao via {...editing}; OK but consider sending the same minimal shape as POST (id is in path).",
+    "build_pedido_totals correctly recomputes custo_unitario/preco_unitario per item from product tabela cols 13/15. DRE persisted and reflected on dashboard.fluxo_pedidos.",
+    "Dashboard endpoint computes lucro_6m using (start_of_month - i*30 days) which can drift across months with 28/31 days; consider monthly arithmetic via dateutil.relativedelta for accuracy.",
+    "ControlePedidos.jsx tfoot colspan math: COLS.length=8 → 3 + 1 + (COLS.length-2)=6 = 10 cells, correct.",
+    "Forma de pagamento '+' button uses window.prompt which is acceptable but breaks UX consistency with the rest of the modal-based UI."
+  ],
+  "updated_files": ["/app/backend/tests/test_pedidos_dashboard.py", "/app/test_reports/iteration_4.json"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin@mm.com / mm123456 (verified)",
+  "seed_data_creation": "Created and DELETED one transient pedido Nº 009 (Ana Lima) during the e2e test; transient TEST_Boleto forma-pagamento created+deleted by pytest.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All FASE 3 flows green: Pedidos modal end-to-end (cliente auto-fill from select, endereço de entrega, data/hora entrega, forma de pagamento, status do pedido/produção, desconto %, add produto from tabela showing Custo Unit/Preço Unit auto, qty editable, outros prefilled+editable, TOTAL DO PEDIDO + DRE live, save persists, list shows Nº zero-padded). Controle de Pedidos: filter narrows rows AND cp-total updates correctly with active filter (verified 'APROVADO' → 2 rows, R$140,45 — sum of two APROVADO orders). Sort buttons toggle ASC/DESC. Expand reveals product detail. Status do Pedido dropdown PATCHes; Status da Produção dropdown becomes disabled when status_pedido is CANCELADO or ENTREGUE and re-enabled on APROVADO (verified live). Dashboard HUD shows KPIs (R$140,45 / R$4,93 / 7,00% / R$46,82), donut + composed chart, produção 1/1/1, top 5 produtos bar, fluxo with status badges, volume 6m chart. Backend pytest at /app/backend/tests/test_pedidos_dashboard.py covers /api/formas-pagamento CRUD, /api/pedidos POST+GET+PATCH with status flow, /api/dashboard payload shape, /api/producao status filter. Only nit: ControlePedidos.jsx Fragment is missing a key prop (React warning).",
+  "rca of the issue": "No bugs to root-cause this iteration. Console warning about Fragment key in ControlePedidos.jsx is purely cosmetic and one-line fix (wrap row+detail in <React.Fragment key={p.id}>...</React.Fragment> instead of <>...</>)."
+}

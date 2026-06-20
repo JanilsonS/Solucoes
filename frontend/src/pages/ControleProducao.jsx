@@ -4,10 +4,12 @@ import { ChefHat, CalendarClock, MapPin, Phone, Package2 } from "lucide-react";
 import { fmtBR } from "@/lib/format";
 
 const PROD_BADGE = {
-  ENTREGUE: "bg-green-100 text-green-800",
+  FINALIZADO: "bg-green-100 text-green-800",
   EM_PRODUCAO: "bg-blue-100 text-blue-800",
-  PENDENTE: "bg-yellow-100 text-yellow-800",
+  NA_FILA: "bg-yellow-100 text-yellow-800",
 };
+
+const PROD_LABEL = { NA_FILA: "Na fila", EM_PRODUCAO: "Em produção", FINALIZADO: "Finalizado" };
 
 const fmtData = (d) => {
   if (!d) return "Sem data";
@@ -67,7 +69,7 @@ export default function ControleProducao() {
                 <div className="text-xs text-[#8B5E48] flex items-center gap-1"><Phone size={12} /> {o.cliente_telefone || "—"}</div>
                 {o.cliente_endereco && <div className="text-xs text-[#8B5E48] flex items-center gap-1"><MapPin size={12} /> {o.cliente_endereco}</div>}
               </div>
-              <span className={`px-2 py-1 rounded text-xs font-semibold ${PROD_BADGE[o.producao] || "bg-gray-100"}`}>{(o.producao || "").replace("_", " ")}</span>
+              <span className={`px-2 py-1 rounded text-xs font-semibold ${PROD_BADGE[o.producao] || "bg-gray-100"}`}>{PROD_LABEL[o.producao] || "—"}</span>
             </div>
             <div className="text-sm text-[#3D2817] mb-2 flex items-center gap-1 font-semibold">
               <CalendarClock size={14} className="text-[#C8856A]" /> {fmtData(o.data_entrega)}{o.hora_entrega ? ` às ${o.hora_entrega}` : ""}

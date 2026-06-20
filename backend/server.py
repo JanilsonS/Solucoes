@@ -657,33 +657,65 @@ async def upsert_cliente(data: ClienteIn, u=Depends(get_user)):
     return doc
 
 
+# ====================== FORMAS DE PAGAMENTO ======================
+class FormaIn(BaseModel):
+    nome: str
+
+
+@api.get("/formas-pagamento")
+async def list_formas(u=Depends(get_user)):
+    items = await db.formas_pagamento.find({}, {"_id": 0}).sort("nome", 1).to_list(1000)
+    if not items:
+        for n in ["PIX", "Dinheiro", "Cartão de Crédito", "Cartão de Débito", "Transferência"]:
+            await db.formas_pagamento.insert_one({"id": new_id(), "nome": n})
+        items = await db.formas_pagamento.find({}, {"_id": 0}).sort("nome", 1).to_list(1000)
+    return items
+
+
+@api.post("/formas-pagamento")
+async def create_forma(data: FormaIn, u=Depends(get_user)):
+    if await db.formas_pagamento.find_one({"nome": data.nome}):
+        raise HTTPException(400, "Forma já existe")
+    doc = {"id": new_id(), "nome": data.nome}
+    await db.formas_pagamento.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api.delete("/formas-pagamento/{fid}")
+async def delete_forma(fid: str, u=Depends(get_user)):
+    await db.formas_pagamento.delete_one({"id": fid})
+    return {"ok": True}
+
+
 # ====================== PEDIDOS ======================
 class PedidoItemIn(BaseModel):
     produto_id: str
-    quantidade: float
-    margem_lucro_pct: float = 0  # custom margin for this order's pricing
+    quantidade: float = 0
+    custo_unitario: float = 0
     preco_unitario: float = 0
 
 
-class ReceitaComercialIn(BaseModel):
+class OutroItemIn(BaseModel):
     descricao: str
-    valor: float
+    valor: float = 0
 
 
 class PedidoIn(BaseModel):
     cliente_id: Optional[str] = None
     cliente_nome: str
-    cliente_telefone: str
+    cliente_telefone: Optional[str] = ""
     cliente_endereco: Optional[str] = ""
-    forma_pagamento: str
-    aprovacao: Literal["APROVADO", "CANCELADO", "PENDENTE"] = "PENDENTE"
-    producao: Literal["EM_PRODUCAO", "ENTREGUE", "PENDENTE"] = "PENDENTE"
-    pagamento: Literal["PAGO", "ABERTO"] = "ABERTO"
+    endereco_entrega: Optional[str] = ""
+    ponto_referencia: Optional[str] = ""
+    forma_pagamento: Optional[str] = ""
+    status_pedido: Literal["CANCELADO", "APROVADO", "ENTREGUE"] = "APROVADO"
+    status_producao: Literal["NA_FILA", "EM_PRODUCAO", "FINALIZADO"] = "NA_FILA"
     desconto_pct: float = 0
     itens: List[PedidoItemIn] = []
-    receita_comercial: List[ReceitaComercialIn] = []
+    outros: List[OutroItemIn] = []
     observacoes: Optional[str] = ""
-    data_evento: Optional[str] = None
+    data_pedido: Optional[str] = None
     data_entrega: Optional[str] = None
     hora_entrega: Optional[str] = None
 
@@ -695,42 +727,81 @@ async def next_pedido_num() -> int:
     return counter.get('seq', 1) if counter else 1
 
 
-@api.get("/pedidos")
-async def list_pedidos(u=Depends(get_user)):
-    return await db.pedidos.find({}, {"_id": 0}).sort("numero", -1).to_list(5000)
-
-
-async def compute_pedido_dre(p: dict) -> dict:
-    """Per-order DRE: Receita - Deduções(índices) - Custo dos produtos = Resultado líquido."""
-    receita_produtos = sum(i.get('quantidade', 0) * i.get('preco_unitario', 0) for i in p.get('itens', []))
-    receita_comercial = sum(r.get('valor', 0) for r in p.get('receita_comercial', []))
-    desconto_val = p.get('desconto_valor', 0)
-    receita_total = receita_produtos + receita_comercial - desconto_val
-
+async def get_total_indices() -> float:
     indices = await db.markups.find({"grupo": "INDICE"}, {"_id": 0}).to_list(1000)
-    total_indices = sum(m.get('indice', 0) for m in indices)
+    return sum(m.get('indice', 0) for m in indices)
+
+
+async def produto_precos(prod: dict, total_indices: float):
+    """Retorna (custo_com_perda [col.13], preco_tabela [col.15]) do produto."""
+    ficha = await db.fichas_tecnicas.find_one({"produto_id": prod['id']}, {"_id": 0}) or {"produto_id": prod['id'], "items": []}
+    enr = await compute_ficha_costs(ficha)
+    custo_producao = sum(enr['subtotals'].values())
+    perda = prod.get('perda_pct', 0)
+    custo_com_perda = custo_producao / (1 - perda / 100) if perda < 100 else custo_producao
+    lucro_ind = prod.get('lucro_pct_individual', 0)
+    div = 1 - (total_indices + lucro_ind) / 100
+    preco_tabela = custo_com_perda / div if div > 0 else 0
+    return custo_com_perda, preco_tabela
+
+
+async def build_pedido_totals(doc: dict) -> dict:
+    total_indices = await get_total_indices()
+    for it in doc.get('itens', []):
+        prod = await db.produtos.find_one({"id": it['produto_id']}, {"_id": 0})
+        if prod:
+            cu, pu = await produto_precos(prod, total_indices)
+            it['custo_unitario'] = cu
+            it['preco_unitario'] = pu
+            it['custo_total'] = cu * it.get('quantidade', 0)
+            it['preco_total'] = pu * it.get('quantidade', 0)
+    subtotal_produtos = sum(i.get('preco_total', 0) for i in doc.get('itens', []))
+    desconto_val = subtotal_produtos * (doc.get('desconto_pct', 0) / 100)
+    total_produtos = subtotal_produtos - desconto_val
+    total_outros = sum(o.get('valor', 0) for o in doc.get('outros', []))
+    total_pedido = total_produtos + total_outros
+    custo_produtos = sum(i.get('custo_total', 0) for i in doc.get('itens', []))
+    receita_total = total_produtos
     deducoes = receita_total * (total_indices / 100)
-
-    custo_produtos = 0.0
-    for it in p.get('itens', []):
-        ficha = await db.fichas_tecnicas.find_one({"produto_id": it['produto_id']}, {"_id": 0})
-        if ficha:
-            enr = await compute_ficha_costs(ficha)
-            custo_produtos += enr['total_custo'] * it.get('quantidade', 0)
-
     resultado_liquido = receita_total - deducoes - custo_produtos
     margem_pct = (resultado_liquido / receita_total * 100) if receita_total else 0
-    return {
-        "receita_produtos": receita_produtos,
-        "receita_comercial": receita_comercial,
+    doc.update({
+        "subtotal_produtos": subtotal_produtos,
         "desconto_valor": desconto_val,
-        "receita_total": receita_total,
-        "total_indices_pct": total_indices,
-        "deducoes": deducoes,
+        "total_produtos": total_produtos,
+        "total_outros": total_outros,
+        "total": total_pedido,
         "custo_produtos": custo_produtos,
-        "resultado_liquido": resultado_liquido,
-        "margem_pct": margem_pct,
-    }
+        "total_indices_pct": total_indices,
+        "dre": {
+            "receita_total": receita_total,
+            "deducoes": deducoes,
+            "custo_produtos": custo_produtos,
+            "resultado_liquido": resultado_liquido,
+            "margem_pct": margem_pct,
+            "total_indices_pct": total_indices,
+        },
+    })
+    return doc
+
+
+def _enrich_pedido_items(p: dict, produtos_map: dict):
+    for it in p.get('itens', []):
+        prod = produtos_map.get(it['produto_id'])
+        if prod:
+            it['descricao'] = prod['descricao']
+            it['unidade'] = prod['unidade']
+            it['codigo'] = prod['codigo']
+
+
+@api.get("/pedidos")
+async def list_pedidos(u=Depends(get_user)):
+    pedidos = await db.pedidos.find({}, {"_id": 0}).sort("numero", -1).to_list(5000)
+    prods = await db.produtos.find({}, {"_id": 0}).to_list(5000)
+    pmap = {p['id']: p for p in prods}
+    for p in pedidos:
+        _enrich_pedido_items(p, pmap)
+    return pedidos
 
 
 @api.get("/pedidos/{pid}")
@@ -738,29 +809,18 @@ async def get_pedido(pid: str, u=Depends(get_user)):
     p = await db.pedidos.find_one({"id": pid}, {"_id": 0})
     if not p:
         raise HTTPException(404, "Não encontrado")
-    # enrich items
-    for it in p.get('itens', []):
-        prod = await db.produtos.find_one({"id": it['produto_id']}, {"_id": 0})
-        if prod:
-            it['descricao'] = prod['descricao']
-            it['unidade'] = prod['unidade']
-            it['codigo'] = prod['codigo']
-    p['dre'] = await compute_pedido_dre(p)
+    prods = await db.produtos.find({}, {"_id": 0}).to_list(5000)
+    _enrich_pedido_items(p, {x['id']: x for x in prods})
     return p
 
 
 @api.post("/pedidos")
 async def create_pedido(data: PedidoIn, u=Depends(get_user)):
     num = await next_pedido_num()
-    # Save cliente
-    await upsert_cliente(ClienteIn(nome=data.cliente_nome, telefone=data.cliente_telefone, endereco=data.cliente_endereco or ""), u)
+    if data.cliente_nome:
+        await upsert_cliente(ClienteIn(nome=data.cliente_nome, telefone=data.cliente_telefone or "", endereco=data.cliente_endereco or ""), u)
     doc = {"id": new_id(), "numero": num, **data.model_dump(), "created_at": now_iso()}
-    # compute totals
-    subtotal = sum(i['quantidade'] * i['preco_unitario'] for i in doc['itens'])
-    rc_total = sum(r['valor'] for r in doc['receita_comercial'])
-    desconto_val = (subtotal + rc_total) * (doc['desconto_pct'] / 100)
-    total = subtotal + rc_total - desconto_val
-    doc.update({"subtotal": subtotal, "receita_comercial_total": rc_total, "desconto_valor": desconto_val, "total": total})
+    doc = await build_pedido_totals(doc)
     await db.pedidos.insert_one(doc)
     doc.pop("_id", None)
     return doc
@@ -772,12 +832,26 @@ async def update_pedido(pid: str, data: PedidoIn, u=Depends(get_user)):
     if not existing:
         raise HTTPException(404, "Não encontrado")
     doc = data.model_dump()
-    subtotal = sum(i['quantidade'] * i['preco_unitario'] for i in doc['itens'])
-    rc_total = sum(r['valor'] for r in doc['receita_comercial'])
-    desconto_val = (subtotal + rc_total) * (doc['desconto_pct'] / 100)
-    total = subtotal + rc_total - desconto_val
-    doc.update({"subtotal": subtotal, "receita_comercial_total": rc_total, "desconto_valor": desconto_val, "total": total})
+    doc['numero'] = existing.get('numero')
+    doc = await build_pedido_totals(doc)
     await db.pedidos.update_one({"id": pid}, {"$set": doc})
+    return {"ok": True}
+
+
+class StatusUpdateIn(BaseModel):
+    status_pedido: Optional[str] = None
+    status_producao: Optional[str] = None
+
+
+@api.patch("/pedidos/{pid}/status")
+async def update_status(pid: str, data: StatusUpdateIn, u=Depends(get_user)):
+    upd = {}
+    if data.status_pedido is not None:
+        upd['status_pedido'] = data.status_pedido
+    if data.status_producao is not None:
+        upd['status_producao'] = data.status_producao
+    if upd:
+        await db.pedidos.update_one({"id": pid}, {"$set": upd})
     return {"ok": True}
 
 
@@ -798,7 +872,7 @@ async def dre(data_inicio: Optional[str] = None, data_fim: Optional[str] = None,
         data_fim = now.isoformat()
 
     pedidos = await db.pedidos.find({
-        "aprovacao": "APROVADO",
+        "status_pedido": {"$in": ["APROVADO", "ENTREGUE"]},
         "created_at": {"$gte": data_inicio, "$lte": data_fim}
     }, {"_id": 0}).to_list(10000)
 
@@ -835,7 +909,7 @@ async def dre(data_inicio: Optional[str] = None, data_fim: Optional[str] = None,
                 for k, v in enr['subtotals'].items():
                     cpv[k] += v * it['quantidade']
 
-        for rc in ped.get('receita_comercial', []):
+        for rc in ped.get('outros', []):
             receita_comercial_total += rc['valor']
             receita_comercial_detalhe.setdefault(rc['descricao'], 0)
             receita_comercial_detalhe[rc['descricao']] += rc['valor']
@@ -872,21 +946,28 @@ async def dashboard(u=Depends(get_user)):
     inicio_mes = now.replace(day=1).isoformat()
 
     total_pedidos = await db.pedidos.count_documents({})
-    pedidos_mes = await db.pedidos.find({"created_at": {"$gte": inicio_mes}}, {"_id": 0}).to_list(10000)
-    aprovados_mes = [p for p in pedidos_mes if p.get('aprovacao') == 'APROVADO']
+    all_pedidos = await db.pedidos.find({}, {"_id": 0}).to_list(20000)
+    validos = [p for p in all_pedidos if p.get('status_pedido') in ('APROVADO', 'ENTREGUE')]
+    validos_mes = [p for p in validos if (p.get('created_at') or '') >= inicio_mes]
 
-    faturamento_mes = sum(p.get('total', 0) for p in aprovados_mes)
-    qtd_aprovados = len(aprovados_mes)
-    ticket_medio = (faturamento_mes / qtd_aprovados) if qtd_aprovados else 0
+    faturamento_mes = sum(p.get('total', 0) for p in validos_mes)
+    lucro_liquido_mes = sum((p.get('dre') or {}).get('resultado_liquido', 0) for p in validos_mes)
+    custo_mes = sum((p.get('dre') or {}).get('custo_produtos', 0) for p in validos_mes)
+    deducoes_mes = sum((p.get('dre') or {}).get('deducoes', 0) for p in validos_mes)
+    receita_produtos_mes = sum(p.get('total_produtos', 0) for p in validos_mes)
+    qtd_validos_mes = len(validos_mes)
+    ticket_medio = (faturamento_mes / qtd_validos_mes) if qtd_validos_mes else 0
+    margem_media = (lucro_liquido_mes / receita_produtos_mes * 100) if receita_produtos_mes else 0
 
-    em_producao = await db.pedidos.count_documents({"producao": "EM_PRODUCAO"})
-    em_aberto = await db.pedidos.count_documents({"pagamento": "ABERTO", "aprovacao": "APROVADO"})
+    fila = await db.pedidos.count_documents({"status_producao": "NA_FILA", "status_pedido": "APROVADO"})
+    em_producao = await db.pedidos.count_documents({"status_producao": "EM_PRODUCAO", "status_pedido": "APROVADO"})
+    finalizados = await db.pedidos.count_documents({"status_producao": "FINALIZADO"})
 
     # Top produtos
     pipeline_top = [
-        {"$match": {"aprovacao": "APROVADO"}},
+        {"$match": {"status_pedido": {"$in": ["APROVADO", "ENTREGUE"]}}},
         {"$unwind": "$itens"},
-        {"$group": {"_id": "$itens.produto_id", "qtd": {"$sum": "$itens.quantidade"}, "valor": {"$sum": {"$multiply": ["$itens.quantidade", "$itens.preco_unitario"]}}}},
+        {"$group": {"_id": "$itens.produto_id", "qtd": {"$sum": "$itens.quantidade"}, "valor": {"$sum": "$itens.preco_total"}}},
         {"$sort": {"valor": -1}},
         {"$limit": 5},
     ]
@@ -895,39 +976,60 @@ async def dashboard(u=Depends(get_user)):
     for t in top_raw:
         prod = await db.produtos.find_one({"id": t['_id']}, {"_id": 0})
         if prod:
-            top_produtos.append({"descricao": prod['descricao'], "qtd": t['qtd'], "valor": t['valor']})
+            top_produtos.append({"descricao": prod['descricao'], "qtd": t['qtd'], "valor": t['valor'] or 0})
 
-    # Faturamento por mês (últimos 6 meses)
-    fat_mes = []
+    # Lucro mensal (bruto vs líquido) + volume, últimos 6 meses
+    lucro_6m = []
+    volume_6m = []
     for i in range(5, -1, -1):
         ref = (now.replace(day=1) - timedelta(days=i * 30)).replace(day=1)
         ini = ref.isoformat()
-        proximo = (ref + timedelta(days=32)).replace(day=1)
-        fim = proximo.isoformat()
-        peds = await db.pedidos.find({"aprovacao": "APROVADO", "created_at": {"$gte": ini, "$lt": fim}}, {"_id": 0}).to_list(10000)
-        fat_mes.append({"mes": ref.strftime("%b/%y"), "valor": sum(p.get('total', 0) for p in peds)})
+        fim = (ref + timedelta(days=32)).replace(day=1).isoformat()
+        peds = [p for p in validos if ini <= (p.get('created_at') or '') < fim]
+        receita = sum(p.get('total_produtos', 0) for p in peds)
+        custo = sum((p.get('dre') or {}).get('custo_produtos', 0) for p in peds)
+        liquido = sum((p.get('dre') or {}).get('resultado_liquido', 0) for p in peds)
+        mes_lbl = ref.strftime("%b/%y")
+        lucro_6m.append({"mes": mes_lbl, "bruto": receita - custo, "liquido": liquido, "faturamento": sum(p.get('total', 0) for p in peds)})
+        volume_6m.append({"mes": mes_lbl, "pedidos": len(peds)})
 
-    # contagem por status
-    status_counts = {}
-    for s in ["PENDENTE", "EM_PRODUCAO", "ENTREGUE"]:
-        status_counts[s] = await db.pedidos.count_documents({"producao": s})
+    # Receita vs custos (donut, mês corrente)
+    receita_vs_custos = [
+        {"name": "Lucro Líquido", "value": max(lucro_liquido_mes, 0)},
+        {"name": "Custo Produtos", "value": custo_mes},
+        {"name": "Deduções", "value": deducoes_mes},
+    ]
+
+    # Fluxo de pedidos (recentes)
+    recentes = sorted(all_pedidos, key=lambda x: x.get('numero', 0), reverse=True)[:6]
+    fluxo = [{
+        "numero": p.get('numero'),
+        "cliente_nome": p.get('cliente_nome'),
+        "status_pedido": p.get('status_pedido'),
+        "status_producao": p.get('status_producao'),
+        "total": p.get('total', 0),
+    } for p in recentes]
 
     total_produtos = await db.produtos.count_documents({"status": "ATIVO"})
     total_clientes = await db.clientes.count_documents({})
 
     return {
         "faturamento_mes": faturamento_mes,
-        "pedidos_mes": len(pedidos_mes),
-        "aprovados_mes": qtd_aprovados,
+        "lucro_liquido_mes": lucro_liquido_mes,
+        "margem_media": margem_media,
         "ticket_medio": ticket_medio,
+        "pedidos_mes": qtd_validos_mes,
+        "fila_producao": fila,
         "em_producao": em_producao,
-        "em_aberto": em_aberto,
+        "finalizados": finalizados,
         "total_pedidos": total_pedidos,
         "total_produtos": total_produtos,
         "total_clientes": total_clientes,
         "top_produtos": top_produtos,
-        "faturamento_6m": fat_mes,
-        "status_producao": status_counts,
+        "lucro_6m": lucro_6m,
+        "volume_6m": volume_6m,
+        "receita_vs_custos": receita_vs_custos,
+        "fluxo_pedidos": fluxo,
     }
 
 
@@ -957,12 +1059,14 @@ async def set_lucro_ind(pid: str, data: ProdutoLucroIn, u=Depends(get_user)):
 @api.get("/producao")
 async def controle_producao(u=Depends(get_user)):
     """Consolida produtos a produzir de pedidos não cancelados, agrupados por data de entrega."""
-    pedidos = await db.pedidos.find({"aprovacao": {"$ne": "CANCELADO"}}, {"_id": 0}).to_list(10000)
+    pedidos = await db.pedidos.find({"status_pedido": {"$nin": ["CANCELADO", "ENTREGUE"]}}, {"_id": 0}).to_list(10000)
+    prods_all = await db.produtos.find({}, {"_id": 0}).to_list(5000)
+    pmap = {pr['id']: pr for pr in prods_all}
     ordens = []
     for p in pedidos:
         itens = []
         for it in p.get('itens', []):
-            prod = await db.produtos.find_one({"id": it['produto_id']}, {"_id": 0})
+            prod = pmap.get(it['produto_id'])
             if prod:
                 itens.append({
                     "codigo": prod['codigo'],
@@ -977,11 +1081,11 @@ async def controle_producao(u=Depends(get_user)):
             "numero": p.get('numero'),
             "cliente_nome": p.get('cliente_nome'),
             "cliente_telefone": p.get('cliente_telefone'),
-            "cliente_endereco": p.get('cliente_endereco', ''),
-            "data_entrega": p.get('data_entrega') or p.get('data_evento'),
+            "cliente_endereco": p.get('endereco_entrega') or p.get('cliente_endereco', ''),
+            "data_entrega": p.get('data_entrega'),
             "hora_entrega": p.get('hora_entrega'),
-            "producao": p.get('producao'),
-            "aprovacao": p.get('aprovacao'),
+            "producao": p.get('status_producao'),
+            "aprovacao": p.get('status_pedido'),
             "itens": itens,
         })
     # consolidado por produto

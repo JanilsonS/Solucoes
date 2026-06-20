@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { LOGO_URL } from "@/lib/api";
 import {
   LayoutDashboard, Package, Wrench, Receipt, Cake, Calculator,
-  FileText, Tags, ShoppingCart, TrendingUp, LogOut, Factory, Sparkles,
+  FileText, Tags, ShoppingCart, TrendingUp, LogOut, Factory, Sparkles, ClipboardList,
 } from "lucide-react";
 
 const NAV = [
@@ -15,7 +15,8 @@ const NAV = [
   { to: "/ficha-tecnica", label: "Ficha Técnica", icon: FileText, tid: "nav-ficha" },
   { to: "/ficha-detalhada", label: "Ficha Detalhada", icon: Sparkles, tid: "nav-ficha-detalhada" },
   { to: "/tabela-preco", label: "Tabela de Preço", icon: Tags, tid: "nav-tabela" },
-  { to: "/pedidos", label: "Pedidos", icon: ShoppingCart, tid: "nav-pedidos" },
+  { to: "/pedidos", label: "Cadastro de Pedidos", icon: ShoppingCart, tid: "nav-pedidos" },
+  { to: "/controle-pedidos", label: "Controle de Pedidos", icon: ClipboardList, tid: "nav-controle-pedidos" },
   { to: "/producao", label: "Controle de Produção", icon: Factory, tid: "nav-producao" },
   { to: "/dre", label: "DRE", icon: TrendingUp, tid: "nav-dre" },
 ];
