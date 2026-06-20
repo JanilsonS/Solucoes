@@ -69,7 +69,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen mm-bg-pattern mm-watermark flex">
-      <aside className="w-64 bg-gradient-to-b from-[#3D2817] to-[#5B3A26] text-white flex flex-col fixed h-screen">
+      <aside className="w-64 bg-gradient-to-b from-[#3D2817] to-[#5B3A26] text-white flex flex-col fixed h-screen no-print">
         <div className="p-5 flex items-center gap-3 border-b border-white/10">
           <img src={LOGO_URL} alt="MM" className="h-14 w-14 rounded-full bg-white p-1 object-contain" />
           <div>
@@ -109,7 +109,7 @@ export default function Layout() {
           <button data-testid="logout-btn" onClick={logout} className="mm-sidebar-link w-full"><LogOut size={18} /> Sair</button>
         </div>
       </aside>
-      <main className="flex-1 ml-64 p-6 pb-16 overflow-x-hidden">
+      <main className="flex-1 ml-64 p-6 pb-16 overflow-x-hidden print-main">
         <Outlet />
       </main>
     </div>

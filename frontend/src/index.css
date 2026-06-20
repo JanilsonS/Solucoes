@@ -217,3 +217,12 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(180,123,107,0.4); border-radius: 8px; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(180,123,107,0.7); }
+
+@media print {
+  .no-print { display: none !important; }
+  .print-main { margin-left: 0 !important; padding: 0 !important; }
+  [data-testid="manual-content"] { grid-column: 1 / -1 !important; }
+  body { background: #fff !important; }
+  a[target="_blank"]::after { content: " (" attr(href) ")"; font-size: 10px; color: #555; }
+}
+

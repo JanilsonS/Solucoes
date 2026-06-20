@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, Download, HardDrive, Shield, LayoutGrid, AlertTriangle, ChevronRight } from "lucide-react";
+import { BookOpen, Download, HardDrive, Shield, LayoutGrid, AlertTriangle, ChevronRight, Printer } from "lucide-react";
 
 const SECTIONS = [
   { id: "visao", label: "Visão Geral", icon: BookOpen },
@@ -49,10 +49,10 @@ export default function Manual() {
 
   return (
     <div className="space-y-5">
-      <header><h1 className="font-display text-4xl text-[#3D2817] flex items-center gap-2"><BookOpen size={28} className="text-[#C8856A]" />Manual do Usuário</h1><p className="text-[#8B5E48] italic text-sm">Guia completo de instalação, backup e uso do sistema</p></header>
+      <header className="flex items-start justify-between gap-4 flex-wrap"><div><h1 className="font-display text-4xl text-[#3D2817] flex items-center gap-2"><BookOpen size={28} className="text-[#C8856A]" />Manual do Usuário</h1><p className="text-[#8B5E48] italic text-sm">Guia completo de instalação, backup e uso do sistema</p></div><button data-testid="manual-print-btn" onClick={() => window.print()} className="mm-btn-3d flex items-center gap-2 no-print"><Printer size={16} />Imprimir / Salvar PDF</button></header>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
-        <aside className="lg:col-span-1">
+        <aside className="lg:col-span-1 no-print">
           <div className="mm-card-glow sticky top-4">
             <div className="font-semibold text-[#3D2817] mb-2 text-sm uppercase tracking-wide">Sumário</div>
             <nav className="space-y-1">
