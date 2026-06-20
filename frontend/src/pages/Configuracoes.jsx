@@ -52,13 +52,13 @@ export default function Configuracoes() {
             <textarea data-testid="wa-template-input" className="mm-input font-mono text-sm" rows={14} value={template} onChange={(e) => setTemplate(e.target.value)} />
             <div className="flex gap-2 mt-3">
               <button data-testid="wa-save-btn" className="mm-btn-3d flex items-center gap-1" onClick={save}><Save size={16} /> Salvar</button>
-              <button className="mm-btn-3d secondary flex items-center gap-1" onClick={reset}><RotateCcw size={16} /> Restaurar padrão</button>
+              <button data-testid="wa-reset-btn" className="mm-btn-3d secondary flex items-center gap-1" onClick={reset}><RotateCcw size={16} /> Restaurar padrão</button>
             </div>
             <div className="mt-4">
               <div className="mm-label mb-1">Marcadores disponíveis:</div>
               <div className="flex flex-wrap gap-2">
                 {TOKENS.map(([t, desc]) => (
-                  <button key={t} title={desc} className="text-xs bg-[#F5EBE0] hover:bg-[#EAD9C5] border border-[#E0C9B0] rounded-full px-2 py-1 font-mono text-[#8B5E48]" onClick={() => setTemplate(template + t)}>{t}</button>
+                  <button key={t} title={desc} className="text-xs bg-[#F5EBE0] hover:bg-[#EAD9C5] border border-[#E0C9B0] rounded-full px-2 py-1 font-mono text-[#8B5E48]" onClick={() => setTemplate((prev) => prev + t)}>{t}</button>
                 ))}
               </div>
             </div>
