@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
-import { Plus, Trash2, FileText, FileSpreadsheet, Pencil, X, UserPlus } from "lucide-react";
+import { Plus, Trash2, FileText, FileSpreadsheet, Pencil, X, UserPlus, MessageCircle } from "lucide-react";
 import { fmtBR, fmtMoney, exportPDF, exportCSV } from "@/lib/format";
+import { openWhatsapp } from "@/lib/whatsapp";
 
 const ST_PEDIDO = ["APROVADO", "ENTREGUE", "CANCELADO"];
 const ST_PROD = ["NA_FILA", "EM_PRODUCAO", "FINALIZADO"];
@@ -167,6 +168,7 @@ export default function Pedidos() {
                   <td className="text-right font-bold">{fmtMoney(p.total)}</td>
                   <td className="whitespace-nowrap">
                     <button data-testid={`ped-edit-${p.numero}`} onClick={() => openEdit(p.id)} className="text-[#8B5E48] mr-2"><Pencil size={16} /></button>
+                    <button data-testid={`ped-whats-${p.numero}`} title="Enviar no WhatsApp" onClick={() => openWhatsapp(p)} className="text-[#25D366] mr-2"><MessageCircle size={16} /></button>
                     <button onClick={() => exportPDF_(p.id)} className="text-[#8B5E48] mr-2"><FileText size={16} /></button>
                     <button onClick={() => exportExcel_(p.id)} className="text-[#8B5E48] mr-2"><FileSpreadsheet size={16} /></button>
                     <button onClick={() => del(p.id)} className="text-[#B85450]"><Trash2 size={16} /></button>

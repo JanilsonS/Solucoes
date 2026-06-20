@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
-import { ChevronDown, ChevronRight, ArrowUpDown, FileText, FileSpreadsheet } from "lucide-react";
+import { ChevronDown, ChevronRight, ArrowUpDown, FileText, FileSpreadsheet, MessageCircle } from "lucide-react";
 import { fmtBR, fmtMoney, exportPDF, exportCSV } from "@/lib/format";
+import { openWhatsapp } from "@/lib/whatsapp";
 
 const ST_PEDIDO = ["APROVADO", "ENTREGUE", "CANCELADO"];
 const ST_PROD = ["NA_FILA", "EM_PRODUCAO", "FINALIZADO"];
@@ -119,7 +120,7 @@ export default function ControlePedidos() {
                 return (
                   <React.Fragment key={p.id}>
                     <tr data-testid={`cp-row-${p.numero}`}>
-                      <td><button data-testid={`cp-expand-${p.numero}`} onClick={() => setExpanded({ ...expanded, [p.id]: !open })} className="text-[#8B5E48]">{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
+                      <td><div className="flex items-center gap-1"><button data-testid={`cp-expand-${p.numero}`} onClick={() => setExpanded({ ...expanded, [p.id]: !open })} className="text-[#8B5E48]">{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button><button data-testid={`cp-whats-${p.numero}`} title="Enviar no WhatsApp" onClick={() => openWhatsapp(p)} className="text-[#25D366]"><MessageCircle size={16} /></button></div></td>
                       <td className="font-bold">{String(p.numero).padStart(3, "0")}</td>
                       <td>{p.cliente_nome}</td>
                       <td className="font-bold text-right">{fmtMoney(p.total)}</td>
