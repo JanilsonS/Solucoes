@@ -16,13 +16,13 @@ import Pedidos from "@/pages/Pedidos";
 import ControlePedidos from "@/pages/ControlePedidos";
 import DRE from "@/pages/DRE";
 import Configuracoes from "@/pages/Configuracoes";
-import EmBreve from "@/pages/EmBreve";
 import TabelaVenda from "@/pages/TabelaVenda";
 import Compras from "@/pages/Compras";
 import MovimentoMP from "@/pages/MovimentoMP";
 import Estoques from "@/pages/Estoques";
 import ControleProducao from "@/pages/ControleProducao";
 import FichaDetalhada from "@/pages/FichaDetalhada";
+import Manual from "@/pages/Manual";
 
 const Protected = ({ children }) => {
   const token = localStorage.getItem("mm_token");
@@ -63,7 +63,7 @@ function App() {
             <Route path="compras" element={<Compras />} />
             <Route path="movimento-mp" element={<MovimentoMP />} />
             <Route path="estoques" element={<Estoques />} />
-            <Route path="manual" element={<EmBreve titulo="Manual do Usuário" />} />
+            <Route path="manual" element={<Manual />} />
           </Route>
         </Routes>
       </BrowserRouter>
