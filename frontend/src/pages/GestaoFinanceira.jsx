@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
-import api from "@/lib/api";
+import api, { LOGO_URL } from "@/lib/api";
 import { toast } from "sonner";
-import { fmtMoney, fmtDate } from "@/lib/format";
-import { ArrowDownCircle, ArrowUpCircle, Wallet, AlertTriangle, CheckCircle2, Circle, Phone, Filter, Activity, TrendingUp, TrendingDown } from "lucide-react";
+import { fmtMoney, fmtDate, exportCSV } from "@/lib/format";
+import { ArrowDownCircle, ArrowUpCircle, Wallet, AlertTriangle, CheckCircle2, Circle, Phone, Filter, Activity, TrendingUp, TrendingDown, FileText, FileSpreadsheet } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ComposedChart, Line, Legend } from "recharts";
 
 const COLORS = ["#C8856A", "#8B5E48", "#6B8E5A", "#D4A373", "#A87C5F", "#9C6B4A", "#E8C9A0", "#B85450"];
@@ -74,6 +74,60 @@ export default function GestaoFinanceira() {
   const temVencidos = vencidos.entradas.length + vencidos.saidas.length > 0;
   const barData = [{ nome: "Recebido", valor: fx.total_entradas }, { nome: "Pago", valor: fx.total_saidas }];
   const filtroAtivo = !!(filtro.inicio || filtro.fim);
+  const periodoLabel = filtroAtivo ? `${filtro.inicio ? fmtDate(filtro.inicio) : "início"} a ${filtro.fim ? fmtDate(filtro.fim) : "fim"}` : "Todos os períodos";
+  const periodoSlug = filtroAtivo ? `${filtro.inicio || "ini"}_${filtro.fim || "fim"}` : "completo";
+
+  const exportarExcel = () => {
+    const rows = [
+      ...entradas.map((e) => ({ tipo: "ENTRADA", doc: String(e.numero).padStart(3, "0"), nome: e.cliente, valor: e.valor, venc: fmtDate(e.data_vencimento), status: e.status_financeiro })),
+      ...saidas.map((s) => ({ tipo: "SAÍDA", doc: s.codigo, nome: s.fornecedor, valor: s.valor, venc: fmtDate(s.data_vencimento), status: s.status_financeiro })),
+    ];
+    const headers = [
+      { label: "Tipo", value: (r) => r.tipo }, { label: "Documento", value: (r) => r.doc },
+      { label: "Cliente/Fornecedor", value: (r) => r.nome }, { label: "Valor", value: (r) => r.valor },
+      { label: "Vencimento", value: (r) => r.venc }, { label: "Status", value: (r) => r.status },
+    ];
+    exportCSV(rows, headers, `financeiro-${periodoSlug}.csv`);
+  };
+
+  const exportarPDF = () => {
+    const linhas = (arr, tipo) => arr.map((r) => `<tr><td>${tipo === "E" ? String(r.numero).padStart(3, "0") : r.codigo}</td><td>${tipo === "E" ? r.cliente : r.fornecedor}</td><td style="text-align:right">${fmtMoney(r.valor)}</td><td style="text-align:right">${fmtDate(r.data_vencimento)}</td><td>${r.status_financeiro}</td></tr>`).join("");
+    const fxLinhas = (arr) => arr.length ? arr.map((g) => `<tr><td>${g.grupo}</td><td style="text-align:right">${fmtMoney(g.valor)}</td></tr>`).join("") : `<tr><td colspan="2"><i>Sem lançamentos</i></td></tr>`;
+    const w = window.open("", "_blank");
+    w.document.write(`<html><head><title>Relatório Financeiro</title><style>
+      @media print { @page { size: A4 portrait; margin: 12mm; } }
+      body { font-family: Georgia, serif; color: #3D2817; padding: 20px; }
+      .hd { display:flex; align-items:center; gap:16px; border-bottom:2px solid #C49080; padding-bottom:10px; margin-bottom:14px; }
+      .hd img { height:64px; } h1 { color:#8B5E48; font-size:22px; margin:0; } h2 { color:#8B5E48; font-size:15px; margin:18px 0 6px; }
+      .sub { font-size:12px; color:#B47B6B; } .grid { display:flex; gap:10px; flex-wrap:wrap; margin:8px 0; }
+      .kpi { border:1px solid #E8DDD3; border-radius:8px; padding:8px 12px; font-size:12px; }
+      .kpi b { display:block; font-size:14px; color:#3D2817; }
+      table { width:100%; border-collapse:collapse; font-size:11px; margin-top:4px; }
+      th { background:#8B5E48; color:#fff; padding:6px; text-align:left; } td { padding:5px 6px; border-bottom:1px solid #E8DDD3; }
+      .ft { margin-top:24px; text-align:center; font-size:10px; color:#B47B6B; font-style:italic; }
+    </style></head><body>
+      <div class="hd"><img src="${LOGO_URL}"/><div><h1>Relatório Financeiro</h1><div class="sub">Período: ${periodoLabel} • Emitido em ${new Date().toLocaleString("pt-BR")}</div></div></div>
+      <div class="grid">
+        <div class="kpi">A Receber<b>${fmtMoney(aReceber)}</b></div>
+        <div class="kpi">Recebido<b>${fmtMoney(fx.total_entradas)}</b></div>
+        <div class="kpi">A Pagar<b>${fmtMoney(aPagar)}</b></div>
+        <div class="kpi">Pago<b>${fmtMoney(fx.total_saidas)}</b></div>
+        <div class="kpi">Saldo de Caixa<b>${fmtMoney(fx.saldo)}</b></div>
+      </div>
+      <h2>Entradas (Vendas)</h2>
+      <table><thead><tr><th>Nº</th><th>Cliente</th><th style="text-align:right">Valor</th><th style="text-align:right">Vencimento</th><th>Status</th></tr></thead><tbody>${linhas(entradas, "E") || '<tr><td colspan="5"><i>Nenhuma</i></td></tr>'}</tbody></table>
+      <h2>Saídas (Compras)</h2>
+      <table><thead><tr><th>Cód.</th><th>Fornecedor</th><th style="text-align:right">Valor</th><th style="text-align:right">Vencimento</th><th>Status</th></tr></thead><tbody>${linhas(saidas, "S") || '<tr><td colspan="5"><i>Nenhuma</i></td></tr>'}</tbody></table>
+      <h2>Fluxo de Caixa por Grupo (Recebido / Pago)</h2>
+      <div style="display:flex; gap:14px;">
+        <table style="flex:1"><thead><tr><th>Entradas por grupo</th><th style="text-align:right">Valor</th></tr></thead><tbody>${fxLinhas(fx.entradas_por_grupo)}</tbody></table>
+        <table style="flex:1"><thead><tr><th>Saídas por grupo</th><th style="text-align:right">Valor</th></tr></thead><tbody>${fxLinhas(fx.saidas_por_grupo)}</tbody></table>
+      </div>
+      <div class="ft">Produto de uso exclusivo da MM Confeitaria e Eventos</div>
+    </body></html>`);
+    w.document.close();
+    setTimeout(() => w.print(), 500);
+  };
 
   // Comparativo de saúde financeira (mês atual vs mês anterior)
   const evChart = evolucao.map((e) => ({ ...e, label: MES_LABEL(e.mes) }));
@@ -84,9 +138,15 @@ export default function GestaoFinanceira() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="font-display text-4xl text-[#3D2817]">Gestão Financeira</h1>
-        <p className="text-[#8B5E48] italic text-sm">Entradas, saídas, fluxo de caixa e contas vencidas</p>
+      <header className="flex justify-between items-start flex-wrap gap-3">
+        <div>
+          <h1 className="font-display text-4xl text-[#3D2817]">Gestão Financeira</h1>
+          <p className="text-[#8B5E48] italic text-sm">Entradas, saídas, fluxo de caixa e contas vencidas</p>
+        </div>
+        <div className="flex gap-2">
+          <button data-testid="fin-export-excel" className="mm-btn-3d secondary flex items-center gap-1" onClick={exportarExcel}><FileSpreadsheet size={16} />Excel</button>
+          <button data-testid="fin-export-pdf" className="mm-btn-3d secondary flex items-center gap-1" onClick={exportarPDF}><FileText size={16} />PDF</button>
+        </div>
       </header>
 
       {/* Filtro por período */}
