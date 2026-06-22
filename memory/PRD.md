@@ -25,7 +25,8 @@ admin@mm.com / mm123456
 - Controle de Pedidos (filtros, range datas, status), Controle de Produção
 - Configurações (mensagem WhatsApp customizável)
 - Menu lateral agrupado
-- **Manual do Usuário online (`/manual`)** — CONCLUÍDO em 20/06/2026 (Lote D finalizado)
+- **Manual do Usuário online (`/manual`)** — CONCLUÍDO em 20/06/2026 (Lote D finalizado), com botão Imprimir/PDF e detalhamento de instalação (pacotes pip, venv na pasta backend)
+- **Gestão Financeira (`/financeiro`)** — CONCLUÍDO em 22/06/2026: campo Data de Vencimento em Pedidos; Telefone do Fornecedor em Compras; 4 blocos (Entradas, Saídas, Fluxo de Caixa por grupo, Contas Vencidas); toggles Recebido/Pago; gráficos (recharts); pop-up automático de vencidos no login. Testado 100% (iteration_7.json).
 
 ## Backlog / Próximas
 - P2: Refatorar `server.py` (1200+ linhas) em rotas modulares (`/app/backend/routes/...`)

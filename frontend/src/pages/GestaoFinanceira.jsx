@@ -18,21 +18,30 @@ const tooltipStyle = { backgroundColor: "#FFF8F1", border: "1px solid #E8DDD3", 
 
 export default function GestaoFinanceira() {
   const [data, setData] = useState(null);
+  const [erro, setErro] = useState(false);
 
-  const load = async () => { const { data } = await api.get("/financeiro"); setData(data); };
+  const load = async () => {
+    try { const { data } = await api.get("/financeiro"); setData(data); setErro(false); }
+    catch { setErro(true); }
+  };
   useEffect(() => { load(); }, []);
 
   const togglePedido = async (e) => {
     const novo = e.status_financeiro === "RECEBIDO" ? "ABERTO" : "RECEBIDO";
-    await api.patch(`/pedidos/${e.id}/financeiro`, { status_financeiro: novo });
-    toast.success(`Venda Nº ${String(e.numero).padStart(3, "0")} → ${novo}`); load();
+    try {
+      await api.patch(`/pedidos/${e.id}/financeiro`, { status_financeiro: novo });
+      toast.success(`Venda Nº ${String(e.numero).padStart(3, "0")} → ${novo}`); load();
+    } catch { toast.error("Não foi possível atualizar o status"); }
   };
   const toggleCompra = async (s) => {
     const novo = s.status_financeiro === "PAGO" ? "ABERTO" : "PAGO";
-    await api.patch(`/compras/${s.id}/financeiro`, { status_financeiro: novo });
-    toast.success(`Compra ${s.codigo} → ${novo}`); load();
+    try {
+      await api.patch(`/compras/${s.id}/financeiro`, { status_financeiro: novo });
+      toast.success(`Compra ${s.codigo} → ${novo}`); load();
+    } catch { toast.error("Não foi possível atualizar o status"); }
   };
 
+  if (erro) return <div className="text-[#B85450] p-6" data-testid="financeiro-erro">Erro ao carregar a gestão financeira. <button className="underline" onClick={load}>Tentar novamente</button></div>;
   if (!data) return <div className="text-[#8B5E48] italic p-6">Carregando gestão financeira...</div>;
 
   const { entradas, saidas, fluxo_caixa: fx, vencidos } = data;
