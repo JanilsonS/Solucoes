@@ -23,6 +23,7 @@ import Estoques from "@/pages/Estoques";
 import ControleProducao from "@/pages/ControleProducao";
 import FichaDetalhada from "@/pages/FichaDetalhada";
 import Manual from "@/pages/Manual";
+import GestaoFinanceira from "@/pages/GestaoFinanceira";
 
 const Protected = ({ children }) => {
   const token = localStorage.getItem("mm_token");
@@ -63,6 +64,7 @@ function App() {
             <Route path="compras" element={<Compras />} />
             <Route path="movimento-mp" element={<MovimentoMP />} />
             <Route path="estoques" element={<Estoques />} />
+            <Route path="financeiro" element={<GestaoFinanceira />} />
             <Route path="manual" element={<Manual />} />
           </Route>
         </Routes>

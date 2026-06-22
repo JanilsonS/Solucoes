@@ -780,12 +780,14 @@ class PedidoIn(BaseModel):
     forma_pagamento: Optional[str] = ""
     status_pedido: Literal["CANCELADO", "APROVADO", "ENTREGUE"] = "APROVADO"
     status_producao: Literal["NA_FILA", "EM_PRODUCAO", "FINALIZADO"] = "NA_FILA"
+    status_financeiro: Literal["ABERTO", "RECEBIDO"] = "ABERTO"
     desconto_pct: float = 0
     itens: List[PedidoItemIn] = []
     outros: List[OutroItemIn] = []
     observacoes: Optional[str] = ""
     data_pedido: Optional[str] = None
     data_entrega: Optional[str] = None
+    data_vencimento: Optional[str] = None
     hora_entrega: Optional[str] = None
 
 
@@ -1101,8 +1103,10 @@ class CompraItemIn(BaseModel):
 
 class CompraIn(BaseModel):
     fornecedor: str = ""
+    telefone_fornecedor: Optional[str] = ""
     data_compra: Optional[str] = None
     data_vencimento: Optional[str] = None
+    status_financeiro: Literal["ABERTO", "PAGO"] = "ABERTO"
     itens: List[CompraItemIn] = []
 
 
@@ -1170,6 +1174,96 @@ async def delete_compra(cid: str, u=Depends(get_user)):
     await db.compras.delete_one({"id": cid})
     await recompute_mp_estoque()
     return {"ok": True}
+
+
+# ---- Gestão Financeira ----
+class FinanceiroStatusIn(BaseModel):
+    status_financeiro: str
+
+
+@api.patch("/pedidos/{pid}/financeiro")
+async def set_pedido_financeiro(pid: str, data: FinanceiroStatusIn, u=Depends(get_user)):
+    if data.status_financeiro not in ("ABERTO", "RECEBIDO"):
+        raise HTTPException(400, "Status inválido")
+    res = await db.pedidos.update_one({"id": pid}, {"$set": {"status_financeiro": data.status_financeiro}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Pedido não encontrado")
+    return {"ok": True}
+
+
+@api.patch("/compras/{cid}/financeiro")
+async def set_compra_financeiro(cid: str, data: FinanceiroStatusIn, u=Depends(get_user)):
+    if data.status_financeiro not in ("ABERTO", "PAGO"):
+        raise HTTPException(400, "Status inválido")
+    res = await db.compras.update_one({"id": cid}, {"$set": {"status_financeiro": data.status_financeiro}})
+    if res.matched_count == 0:
+        raise HTTPException(404, "Compra não encontrada")
+    return {"ok": True}
+
+
+@api.get("/financeiro")
+async def get_financeiro(u=Depends(get_user)):
+    hoje = datetime.now(timezone.utc).date().isoformat()
+    groups = await db.groups.find({}, {"_id": 0}).to_list(5000)
+    gmap = {g['id']: g['nome'] for g in groups}
+    produtos = await db.produtos.find({}, {"_id": 0}).to_list(5000)
+    pmap = {p['id']: p for p in produtos}
+    mps = await db.materias_primas.find({}, {"_id": 0}).to_list(5000)
+    mpmap = {m['id']: m for m in mps}
+
+    pedidos = await db.pedidos.find({"status_pedido": {"$ne": "CANCELADO"}}, {"_id": 0}).sort("numero", -1).to_list(20000)
+    compras = await db.compras.find({}, {"_id": 0}).sort("codigo", -1).to_list(20000)
+
+    entradas = [{
+        "id": p['id'], "numero": p.get('numero'),
+        "cliente": p.get('cliente_nome', ''), "telefone": p.get('cliente_telefone', ''),
+        "valor": p.get('total', 0), "data_vencimento": p.get('data_vencimento'),
+        "status_financeiro": p.get('status_financeiro', 'ABERTO'),
+    } for p in pedidos]
+
+    saidas = [{
+        "id": c['id'], "codigo": c.get('codigo'),
+        "fornecedor": c.get('fornecedor', ''), "telefone": c.get('telefone_fornecedor', ''),
+        "valor": c.get('total_pedido', 0) or sum(i.get('valor_total', 0) for i in c.get('itens', [])),
+        "data_vencimento": c.get('data_vencimento'),
+        "status_financeiro": c.get('status_financeiro', 'ABERTO'),
+    } for c in compras]
+
+    fluxo_entradas: Dict[str, float] = {}
+    for p in pedidos:
+        if p.get('status_financeiro') != 'RECEBIDO':
+            continue
+        for it in p.get('itens', []):
+            prod = pmap.get(it.get('produto_id'))
+            gnome = (gmap.get(prod.get('grupo_id')) if prod else None) or "Sem grupo"
+            fluxo_entradas[gnome] = fluxo_entradas.get(gnome, 0) + it.get('preco_total', 0)
+
+    fluxo_saidas: Dict[str, float] = {}
+    for c in compras:
+        if c.get('status_financeiro') != 'PAGO':
+            continue
+        for it in c.get('itens', []):
+            mp = mpmap.get(it.get('materia_prima_id'))
+            gnome = (gmap.get(mp.get('grupo_id')) if mp else None) or "Sem grupo"
+            fluxo_saidas[gnome] = fluxo_saidas.get(gnome, 0) + it.get('valor_total', 0)
+
+    total_entradas = sum(fluxo_entradas.values())
+    total_saidas = sum(fluxo_saidas.values())
+
+    venc_entradas = [e for e in entradas if e['status_financeiro'] == 'ABERTO' and e['data_vencimento'] and e['data_vencimento'] < hoje]
+    venc_saidas = [s for s in saidas if s['status_financeiro'] == 'ABERTO' and s['data_vencimento'] and s['data_vencimento'] < hoje]
+
+    return {
+        "entradas": entradas,
+        "saidas": saidas,
+        "fluxo_caixa": {
+            "entradas_por_grupo": [{"grupo": k, "valor": v} for k, v in sorted(fluxo_entradas.items(), key=lambda x: -x[1])],
+            "saidas_por_grupo": [{"grupo": k, "valor": v} for k, v in sorted(fluxo_saidas.items(), key=lambda x: -x[1])],
+            "total_entradas": total_entradas, "total_saidas": total_saidas,
+            "saldo": total_entradas - total_saidas,
+        },
+        "vencidos": {"entradas": venc_entradas, "saidas": venc_saidas},
+    }
 
 
 # ---- Movimento de Matéria-Prima ----

@@ -1,0 +1,34 @@
+{
+  "summary": "Financeiro feature batch fully verified end-to-end. Backend: 7/7 pytest pass (PedidoIn.data_vencimento + status_financeiro persistence, CompraIn.telefone_fornecedor + data_vencimento persistence, PATCH /api/pedidos/{id}/financeiro and /api/compras/{id}/financeiro toggles with 400 on invalid value, GET /api/financeiro structure, vencidos filter (status ABERTO + data_vencimento < hoje), and 'Outros' items correctly excluded from fluxo_caixa). Frontend: ped-data-vencimento (type=date) renders in Novo Pedido modal and persists across reopen; compra-telefone + compra-vencimento render in Nova Compra modal; /financeiro renders all 5 KPIs (kpi-receber, kpi-recebido, kpi-pagar, kpi-pago, kpi-saldo), 3 blocks (bloco-entradas, bloco-saidas, bloco-fluxo) plus 3 charts; entrada-toggle-{n} and saida-toggle-{cod} flip status via PATCH and refresh fluxo (PIPOCAS R$ 20,13 / SECOS E GRÃOS R$ 250,00 grouping confirmed); bloco-vencidos shows overdue pedido with WhatsApp telefone link; auto-popup alerta-vencidos-modal appears on login when there are overdue items with working 'Fechar' (alerta-fechar-btn) and 'Ir para Gestão Financeira' (alerta-ir-financeiro) buttons; popup correctly absent when no overdue items.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard (/dashboard)", "issues": ["Dashboard uses a dark cyan/neon 'STRATEGIC CONFECTIONERY SYSTEM' theme while the rest of the app (sidebar, /financeiro, /pedidos, /compras, login, popup) uses warm earth tones ('MM Confeitaria & Eventos'). Inconsistent branding — not in this batch's scope but worth flagging."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_financeiro.py",
+    "/app/test_reports/pytest/financeiro.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py /api/financeiro (line 1204): recomputes everything (groups + produtos + MPs + all pedidos + all compras) on every GET. For larger datasets this becomes O(N+M+P+G) per request. Acceptable for current scale but consider caching mp/produto/group maps in memory or denormalizing grupo_nome onto compras/pedidos at write-time.",
+    "Layout.jsx (line 71-76): the overdue popup fires api.get('/financeiro') on EVERY mount of Layout, not just on login. Spec asks 'popup every login' but in SPA terms this runs on every route change that remounts Layout (currently Layout is the root layout so it only mounts once after login — OK). If routing is later refactored, re-evaluate.",
+    "GestaoFinanceira.jsx (line 27-28 / 32-33): toggle functions don't handle PATCH errors; if backend returns 404/400 the toast still says 'success'. Wrap in try/catch and show toast.error on failure.",
+    "GestaoFinanceira.jsx (line 22): no error state — if /api/financeiro fails the page is stuck on 'Carregando gestão financeira...' forever. Add a catch + error UI.",
+    "Pedidos.jsx (line 202) injects a <span> child inside <option> via Vibe Editor wrapper, causing a React hydration warning in console ('In HTML, <span> cannot be a child of <option>'). Not a runtime bug but pollutes console. Likely a dev-injection issue, not in user code.",
+    "server.py PATCH /pedidos/{id}/financeiro and /compras/{id}/financeiro use Literal types in the Pydantic model but also re-check with `if data.status_financeiro not in (...)` raising 400 — redundant (Pydantic already 422s on invalid Literal), but harmless. The test confirms 400 is returned, which works."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_financeiro.py"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (10/10 checks)"},
+  "test_credentials": "admin@mm.com / mm123456 (verified)",
+  "seed_data_creation": "Created and deleted: TEST_E2E_Venc_Cliente (pedido 014, R$10,06, venc 2026-05-20) used to verify popup + bloco-vencidos + entrada-toggle. Created/deleted multiple TEST_ pedidos and TEST_ compras during pytest (all cleaned up in fixtures/finally blocks). Pedido counter advanced from 7 → ~14 during testing — non-destructive. Pedido 007 was temporarily toggled to RECEBIDO during UI test and reset back to ABERTO via API after.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All feature batch verified GREEN. Verified flows: (1) Login admin@mm.com/mm123456 → dashboard, popup auto-appears if overdue exist (vencidos.entradas+saidas > 0). (2) /pedidos → 'Novo Pedido' modal has data-testid='ped-data-vencimento' (type=date), value persists in DB and reloads on edit. (3) /compras → 'Nova Compra' modal has data-testid='compra-telefone' and 'compra-vencimento'. (4) /financeiro: KPIs kpi-receber/kpi-recebido/kpi-pagar/kpi-pago/kpi-saldo, 3 blocks (bloco-entradas with entrada-toggle-{numero}, bloco-saidas with saida-toggle-{codigo}, bloco-fluxo with fluxo-saldo). Toggling entrada → RECEBIDO calls PATCH /api/pedidos/{id}/financeiro and adds its itens' preco_total grouped by produto.grupo_nome into fluxo_caixa.entradas_por_grupo. Toggling saida → PAGO calls PATCH /api/compras/{id}/financeiro and adds itens grouped by mp.grupo_nome. 'Outros' items in pedidos are NOT counted in fluxo (verified). (5) bloco-vencidos shows entries with status_financeiro=ABERTO AND data_vencimento < today, with WhatsApp wa.me links. (6) Layout.jsx auto-fetches /api/financeiro on mount and shows alerta-vencidos-modal if any vencido exists; modal has alerta-fechar-btn, alerta-fechar-x and alerta-ir-financeiro (navigates to /financeiro). Popup correctly hidden when no overdue items. Note: existing pedidos in DB have data_vencimento=null/missing — they don't trigger overdue (correct behavior).",
+  "rca of the issue": "No bugs found. The only console warning is a Vibe Editor dev-injection (<span> child of <option>) unrelated to feature."
+}

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Pencil, X, FileText, FileSpreadsheet } from "lucide-react";
 import { fmtBR, fmtMoney, fmtDate, exportPDF, exportCSV } from "@/lib/format";
 
-const novo = () => ({ fornecedor: "", data_compra: new Date().toISOString().slice(0, 10), data_vencimento: "", itens: [] });
+const novo = () => ({ fornecedor: "", telefone_fornecedor: "", data_compra: new Date().toISOString().slice(0, 10), data_vencimento: "", itens: [] });
 
 export default function Compras() {
   const [compras, setCompras] = useState([]);
@@ -31,7 +31,7 @@ export default function Compras() {
   const total = (editing?.itens || []).reduce((s, i) => s + Number(i.valor_total || 0), 0);
 
   const save = async () => {
-    const payload = { fornecedor: editing.fornecedor, data_compra: editing.data_compra, data_vencimento: editing.data_vencimento, itens: editing.itens.map((i) => ({ materia_prima_id: i.materia_prima_id, quantidade: Number(i.quantidade), valor_total: Number(i.valor_total) })) };
+    const payload = { fornecedor: editing.fornecedor, telefone_fornecedor: editing.telefone_fornecedor, data_compra: editing.data_compra, data_vencimento: editing.data_vencimento, itens: editing.itens.map((i) => ({ materia_prima_id: i.materia_prima_id, quantidade: Number(i.quantidade), valor_total: Number(i.valor_total) })) };
     if (editing.id) await api.put(`/compras/${editing.id}`, payload); else await api.post("/compras", payload);
     toast.success("Compra salva! Estoque atualizado."); setShow(false); setEditing(null); load();
   };
@@ -73,8 +73,9 @@ export default function Compras() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="mm-glass w-full max-w-4xl max-h-[92vh] overflow-y-auto p-6">
             <div className="flex justify-between items-center mb-4"><h2 className="font-display text-2xl text-[#3D2817]">{editing.id ? `Compra ${editing.codigo}` : "Nova Compra"}</h2><button onClick={() => { setShow(false); setEditing(null); }} className="text-[#8B5E48]"><X size={24} /></button></div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
               <div><label className="mm-label">Fornecedor</label><input data-testid="compra-fornecedor" className="mm-input" value={editing.fornecedor} onChange={(e) => setEditing({ ...editing, fornecedor: e.target.value })} /></div>
+              <div><label className="mm-label">Telefone do Fornecedor</label><input data-testid="compra-telefone" className="mm-input" value={editing.telefone_fornecedor || ""} onChange={(e) => setEditing({ ...editing, telefone_fornecedor: e.target.value })} /></div>
               <div><label className="mm-label">Data da Compra</label><input type="date" className="mm-input" value={editing.data_compra || ""} onChange={(e) => setEditing({ ...editing, data_compra: e.target.value })} /></div>
               <div><label className="mm-label">Vencimento do Pagamento</label><input data-testid="compra-vencimento" type="date" className="mm-input" value={editing.data_vencimento || ""} onChange={(e) => setEditing({ ...editing, data_vencimento: e.target.value })} /></div>
             </div>

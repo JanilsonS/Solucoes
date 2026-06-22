@@ -30,6 +30,7 @@ const MODULOS = [
   ["Pedido de Compras", "Registra compras de matéria-prima (gera entradas no estoque)."],
   ["Movimento de Matéria-Prima", "Entradas (compras) e saídas (produção) por período, com saldo em quantidade e valor (custo médio)."],
   ["Gestão de Estoques", "Estoque atual x necessidade dos pedidos. Saldo negativo em vermelho. Ordenação ABC."],
+  ["Gestão Financeira", "Entradas (vendas) e Saídas (compras) com status Recebido/Pago, fluxo de caixa por grupo, gráficos e alerta de contas vencidas."],
   ["Cadastro de Pedidos", "Monta o pedido (cliente, entrega, produtos com preço oficial, outros, DRE do pedido). Exporta PDF/Excel e WhatsApp."],
   ["Controle de Pedidos", "Relatório com filtros, range de datas, status e detalhes expansíveis."],
   ["Controle de Produção", "Lista consolidada de produtos a produzir e agenda de entregas."],
@@ -88,8 +89,38 @@ export default function Manual() {
           </Sec>
 
           <Sec id="instalacao" title="Instalação e Uso" icon={HardDrive}>
-            <p><strong>Primeira vez:</strong> dê dois cliques em <code className="bg-[#F5EBE0] px-1 rounded">instalar.bat</code> (5–10 min).</p>
-            <p><strong>Para usar todo dia:</strong> dois cliques em <code className="bg-[#F5EBE0] px-1 rounded">iniciar.bat</code>. Aguarde abrir 2 janelas pretas (não feche) e o navegador abrir em <code className="bg-[#F5EBE0] px-1 rounded">http://localhost:3000</code>.</p>
+            <p className="font-semibold text-[#3D2817]">📁 Onde instalar?</p>
+            <p>O sistema é instalado <strong>dentro da própria pasta onde você baixou/descompactou</strong> os arquivos (ex.: <code className="bg-[#F5EBE0] px-1 rounded">C:\MMConfeitaria</code>). <strong>Não</strong> instala no diretório raiz do Windows nem em "Arquivos de Programas". Tudo fica autocontido nessa pasta — inclusive as bibliotecas Python (numa subpasta <code className="bg-[#F5EBE0] px-1 rounded">backend\venv</code>) e do frontend (<code className="bg-[#F5EBE0] px-1 rounded">frontend\node_modules</code>).</p>
+
+            <p className="font-semibold text-[#3D2817] mt-3">⚙️ Primeira vez (instalação automática)</p>
+            <p>Dê dois cliques em <code className="bg-[#F5EBE0] px-1 rounded">instalar.bat</code> (leva 5–10 min). Ele faz, sozinho, na pasta do sistema:</p>
+            <ol className="list-decimal ml-5 space-y-1">
+              <li>Confere se Python, Node.js e Yarn estão instalados.</li>
+              <li>Cria um ambiente virtual Python isolado: <code className="bg-[#F5EBE0] px-1 rounded">python -m venv venv</code> (dentro de <code>backend\</code>).</li>
+              <li>Instala todas as bibliotecas Python com <code className="bg-[#F5EBE0] px-1 rounded">pip install -r requirements.txt</code>.</li>
+              <li>Cria os arquivos de configuração <code>.env</code> do backend e do frontend.</li>
+              <li>Instala as dependências do frontend com <code className="bg-[#F5EBE0] px-1 rounded">yarn install</code>.</li>
+            </ol>
+
+            <p className="font-semibold text-[#3D2817] mt-3">📦 Bibliotecas Python instaladas (requirements.txt)</p>
+            <p className="text-xs">Você não precisa instalar manualmente — o <code>instalar.bat</code> cuida disso. Lista de referência:</p>
+            <div className="overflow-x-auto"><table className="mm-table text-xs">
+              <thead><tr><th>Pacote</th><th>Para quê serve</th></tr></thead>
+              <tbody>
+                <tr><td>fastapi, uvicorn</td><td>Servidor da API (backend).</td></tr>
+                <tr><td>motor, pymongo</td><td>Conexão com o banco MongoDB.</td></tr>
+                <tr><td>pydantic, email-validator</td><td>Validação dos dados.</td></tr>
+                <tr><td>pyjwt, bcrypt, passlib, python-jose</td><td>Login seguro e senhas.</td></tr>
+                <tr><td>python-dotenv</td><td>Leitura do arquivo .env.</td></tr>
+                <tr><td>python-multipart, boto3</td><td>Upload de imagens (Ficha Detalhada).</td></tr>
+                <tr><td>pandas, numpy</td><td>Cálculos e relatórios.</td></tr>
+                <tr><td>requests, requests-oauthlib, cryptography</td><td>Integrações e segurança.</td></tr>
+              </tbody>
+            </table></div>
+            <p className="text-xs italic">Para reinstalar/atualizar manualmente (avançado): abra o cmd na pasta <code>backend</code>, rode <code className="bg-[#F5EBE0] px-1 rounded">venv\Scripts\activate</code> e depois <code className="bg-[#F5EBE0] px-1 rounded">pip install -r requirements.txt</code>.</p>
+
+            <p className="font-semibold text-[#3D2817] mt-3">▶️ Para usar todo dia</p>
+            <p>Dois cliques em <code className="bg-[#F5EBE0] px-1 rounded">iniciar.bat</code>. Aguarde abrir 2 janelas pretas (Backend e Frontend — <strong>não feche</strong>) e o navegador abrir em <code className="bg-[#F5EBE0] px-1 rounded">http://localhost:3000</code>.</p>
             <p><strong>Para fechar:</strong> feche as 2 janelas pretas.</p>
           </Sec>
 

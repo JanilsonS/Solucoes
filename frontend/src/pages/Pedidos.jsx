@@ -231,9 +231,10 @@ export default function Pedidos() {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <div><label className="mm-label">Status do Pedido</label><select className="mm-input" value={editing.status_pedido} onChange={(e) => setEditing({ ...editing, status_pedido: e.target.value })}>{ST_PEDIDO.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
               <div><label className="mm-label">Status da Produção</label><select className="mm-input" value={editing.status_producao} onChange={(e) => setEditing({ ...editing, status_producao: e.target.value })}>{ST_PROD.map((s) => <option key={s} value={s}>{PROD_LABEL[s]}</option>)}</select></div>
+              <div><label className="mm-label">Data de Vencimento</label><input data-testid="ped-data-vencimento" type="date" className="mm-input" value={editing.data_vencimento || ""} onChange={(e) => setEditing({ ...editing, data_vencimento: e.target.value })} /></div>
               <div><label className="mm-label">Desconto (%)</label><input data-testid="ped-desconto" type="number" step="0.01" className="mm-input" value={editing.desconto_pct} onChange={(e) => setEditing({ ...editing, desconto_pct: e.target.value })} /></div>
             </div>
 
