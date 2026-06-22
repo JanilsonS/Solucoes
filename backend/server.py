@@ -1202,7 +1202,7 @@ async def set_compra_financeiro(cid: str, data: FinanceiroStatusIn, u=Depends(ge
 
 
 @api.get("/financeiro")
-async def get_financeiro(u=Depends(get_user)):
+async def get_financeiro(inicio: Optional[str] = None, fim: Optional[str] = None, u=Depends(get_user)):
     hoje = datetime.now(timezone.utc).date().isoformat()
     groups = await db.groups.find({}, {"_id": 0}).to_list(5000)
     gmap = {g['id']: g['nome'] for g in groups}
@@ -1213,6 +1213,21 @@ async def get_financeiro(u=Depends(get_user)):
 
     pedidos = await db.pedidos.find({"status_pedido": {"$ne": "CANCELADO"}}, {"_id": 0}).sort("numero", -1).to_list(20000)
     compras = await db.compras.find({}, {"_id": 0}).sort("codigo", -1).to_list(20000)
+
+    def _no_periodo(venc):
+        if not inicio and not fim:
+            return True
+        if not venc:
+            return False
+        v = str(venc)[:10]
+        if inicio and v < inicio:
+            return False
+        if fim and v > fim:
+            return False
+        return True
+
+    pedidos = [p for p in pedidos if _no_periodo(p.get('data_vencimento'))]
+    compras = [c for c in compras if _no_periodo(c.get('data_vencimento'))]
 
     entradas = [{
         "id": p['id'], "numero": p.get('numero'),
@@ -1264,6 +1279,50 @@ async def get_financeiro(u=Depends(get_user)):
         },
         "vencidos": {"entradas": venc_entradas, "saidas": venc_saidas},
     }
+
+
+@api.get("/financeiro/evolucao")
+async def financeiro_evolucao(meses: int = 6, u=Depends(get_user)):
+    pedidos = await db.pedidos.find({"status_pedido": {"$ne": "CANCELADO"}}, {"_id": 0}).to_list(20000)
+    compras = await db.compras.find({}, {"_id": 0}).to_list(20000)
+
+    rec: Dict[str, float] = {}
+    arec: Dict[str, float] = {}
+    pag: Dict[str, float] = {}
+    apag: Dict[str, float] = {}
+
+    def _add(d, k, v):
+        d[k] = d.get(k, 0) + v
+
+    for p in pedidos:
+        venc = (p.get('data_vencimento') or '')[:7]
+        if len(venc) != 7:
+            continue
+        val = sum(it.get('preco_total', 0) for it in p.get('itens', []))
+        _add(rec if p.get('status_financeiro') == 'RECEBIDO' else arec, venc, val)
+    for c in compras:
+        venc = (c.get('data_vencimento') or '')[:7]
+        if len(venc) != 7:
+            continue
+        val = sum(it.get('valor_total', 0) for it in c.get('itens', []))
+        _add(pag if c.get('status_financeiro') == 'PAGO' else apag, venc, val)
+
+    hoje = datetime.now(timezone.utc).date()
+    y, m = hoje.year, hoje.month
+    ultimos = []
+    for _ in range(max(1, meses)):
+        ultimos.append(f"{y:04d}-{m:02d}")
+        m -= 1
+        if m == 0:
+            m = 12
+            y -= 1
+    meses_lista = sorted(set(ultimos) | set(rec) | set(pag) | set(arec) | set(apag))
+    return [{
+        "mes": mm,
+        "recebido": rec.get(mm, 0), "pago": pag.get(mm, 0),
+        "saldo": rec.get(mm, 0) - pag.get(mm, 0),
+        "a_receber": arec.get(mm, 0), "a_pagar": apag.get(mm, 0),
+    } for mm in meses_lista]
 
 
 # ---- Movimento de Matéria-Prima ----

@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { fmtMoney, fmtDate } from "@/lib/format";
-import { ArrowDownCircle, ArrowUpCircle, Wallet, AlertTriangle, CheckCircle2, Circle, Phone } from "lucide-react";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { ArrowDownCircle, ArrowUpCircle, Wallet, AlertTriangle, CheckCircle2, Circle, Phone, Filter, Activity, TrendingUp, TrendingDown } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, ComposedChart, Line, Legend } from "recharts";
 
 const COLORS = ["#C8856A", "#8B5E48", "#6B8E5A", "#D4A373", "#A87C5F", "#9C6B4A", "#E8C9A0", "#B85450"];
+const MES_LABEL = (mm) => { const [y, m] = mm.split("-"); return `${["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"][Number(m) - 1]}/${String(y).slice(2)}`; };
 
 const KpiCard = ({ icon: Icon, label, value, tone, tid }) => (
   <div className="mm-glass p-4 flex items-center gap-3" data-testid={tid}>
@@ -19,29 +20,52 @@ const tooltipStyle = { backgroundColor: "#FFF8F1", border: "1px solid #E8DDD3", 
 export default function GestaoFinanceira() {
   const [data, setData] = useState(null);
   const [erro, setErro] = useState(false);
+  const [filtro, setFiltro] = useState({ inicio: "", fim: "" });
+  const [evolucao, setEvolucao] = useState([]);
 
-  const load = async () => {
-    try { const { data } = await api.get("/financeiro"); setData(data); setErro(false); }
-    catch { setErro(true); }
+  const load = useCallback(async (f) => {
+    const ff = f || filtro;
+    try {
+      const params = {};
+      if (ff.inicio) params.inicio = ff.inicio;
+      if (ff.fim) params.fim = ff.fim;
+      const { data } = await api.get("/financeiro", { params });
+      setData(data); setErro(false);
+    } catch { setErro(true); }
+  }, [filtro]);
+
+  const loadEvolucao = async () => {
+    try { const { data } = await api.get("/financeiro/evolucao", { params: { meses: 6 } }); setEvolucao(data); } catch { /* noop */ }
   };
-  useEffect(() => { load(); }, []);
+
+  useEffect(() => { load(); loadEvolucao(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const aplicarFiltro = (f) => { setFiltro(f); load(f); };
+  const presetMes = (offset) => {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + offset);
+    const ini = new Date(d.getFullYear(), d.getMonth(), 1);
+    const fim = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const iso = (x) => x.toISOString().slice(0, 10);
+    aplicarFiltro({ inicio: iso(ini), fim: iso(fim) });
+  };
+  const limparFiltro = () => aplicarFiltro({ inicio: "", fim: "" });
 
   const togglePedido = async (e) => {
     const novo = e.status_financeiro === "RECEBIDO" ? "ABERTO" : "RECEBIDO";
     try {
       await api.patch(`/pedidos/${e.id}/financeiro`, { status_financeiro: novo });
-      toast.success(`Venda Nº ${String(e.numero).padStart(3, "0")} → ${novo}`); load();
+      toast.success(`Venda Nº ${String(e.numero).padStart(3, "0")} → ${novo}`); load(); loadEvolucao();
     } catch { toast.error("Não foi possível atualizar o status"); }
   };
   const toggleCompra = async (s) => {
     const novo = s.status_financeiro === "PAGO" ? "ABERTO" : "PAGO";
     try {
       await api.patch(`/compras/${s.id}/financeiro`, { status_financeiro: novo });
-      toast.success(`Compra ${s.codigo} → ${novo}`); load();
+      toast.success(`Compra ${s.codigo} → ${novo}`); load(); loadEvolucao();
     } catch { toast.error("Não foi possível atualizar o status"); }
   };
 
-  if (erro) return <div className="text-[#B85450] p-6" data-testid="financeiro-erro">Erro ao carregar a gestão financeira. <button className="underline" onClick={load}>Tentar novamente</button></div>;
+  if (erro) return <div className="text-[#B85450] p-6" data-testid="financeiro-erro">Erro ao carregar a gestão financeira. <button className="underline" onClick={() => load()}>Tentar novamente</button></div>;
   if (!data) return <div className="text-[#8B5E48] italic p-6">Carregando gestão financeira...</div>;
 
   const { entradas, saidas, fluxo_caixa: fx, vencidos } = data;
@@ -49,6 +73,14 @@ export default function GestaoFinanceira() {
   const aPagar = saidas.filter((s) => s.status_financeiro === "ABERTO").reduce((a, s) => a + s.valor, 0);
   const temVencidos = vencidos.entradas.length + vencidos.saidas.length > 0;
   const barData = [{ nome: "Recebido", valor: fx.total_entradas }, { nome: "Pago", valor: fx.total_saidas }];
+  const filtroAtivo = !!(filtro.inicio || filtro.fim);
+
+  // Comparativo de saúde financeira (mês atual vs mês anterior)
+  const evChart = evolucao.map((e) => ({ ...e, label: MES_LABEL(e.mes) }));
+  const ult = evolucao[evolucao.length - 1];
+  const penult = evolucao[evolucao.length - 2];
+  const deltaSaldo = ult && penult ? ult.saldo - penult.saldo : 0;
+  const saudavel = ult ? ult.saldo >= 0 : true;
 
   return (
     <div className="space-y-5">
@@ -56,6 +88,18 @@ export default function GestaoFinanceira() {
         <h1 className="font-display text-4xl text-[#3D2817]">Gestão Financeira</h1>
         <p className="text-[#8B5E48] italic text-sm">Entradas, saídas, fluxo de caixa e contas vencidas</p>
       </header>
+
+      {/* Filtro por período */}
+      <div className="mm-glass p-3 flex flex-wrap items-end gap-3" data-testid="financeiro-filtro">
+        <div className="flex items-center gap-2 text-[#8B5E48] font-semibold text-sm"><Filter size={16} />Período (por vencimento)</div>
+        <div><label className="mm-label">Início</label><input data-testid="filtro-inicio" type="date" className="mm-input" style={{ width: 160 }} value={filtro.inicio} onChange={(e) => setFiltro({ ...filtro, inicio: e.target.value })} /></div>
+        <div><label className="mm-label">Fim</label><input data-testid="filtro-fim" type="date" className="mm-input" style={{ width: 160 }} value={filtro.fim} onChange={(e) => setFiltro({ ...filtro, fim: e.target.value })} /></div>
+        <button data-testid="filtro-aplicar" className="mm-btn-3d" onClick={() => aplicarFiltro(filtro)}>Aplicar</button>
+        <button data-testid="filtro-mes-atual" className="mm-btn-3d secondary text-sm" onClick={() => presetMes(0)}>Este mês</button>
+        <button data-testid="filtro-mes-anterior" className="mm-btn-3d secondary text-sm" onClick={() => presetMes(-1)}>Mês anterior</button>
+        {filtroAtivo && <button data-testid="filtro-limpar" className="mm-btn-3d secondary text-sm" onClick={limparFiltro}>Limpar</button>}
+        {filtroAtivo && <span className="text-xs text-[#C8856A] italic">Filtrando {filtro.inicio ? fmtDate(filtro.inicio) : "início"} → {filtro.fim ? fmtDate(filtro.fim) : "fim"}</span>}
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
@@ -161,6 +205,45 @@ export default function GestaoFinanceira() {
             </PieChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* Comparativo de Saúde Financeira (evolução mensal) */}
+      <div className="mm-glass p-4" data-testid="bloco-evolucao">
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+          <h2 className="font-display text-xl text-[#3D2817] flex items-center gap-2"><Activity size={20} className="text-[#6B8E5A]" />Comparativo da Saúde Financeira</h2>
+          {ult && (
+            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold ${saudavel ? "bg-[#E6F0DF] text-[#4E7340]" : "bg-[#F7E4E2] text-[#B85450]"}`} data-testid="evolucao-status">
+              {saudavel ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+              {MES_LABEL(ult.mes)}: {saudavel ? "Saldo positivo" : "Saldo negativo"} ({fmtMoney(ult.saldo)})
+              {penult && <span className="text-xs opacity-80">• {deltaSaldo >= 0 ? "▲" : "▼"} {fmtMoney(Math.abs(deltaSaldo))} vs {MES_LABEL(penult.mes)}</span>}
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-[#8B5E48] italic mb-2">Recebido x Pago x Saldo por mês (com base na data de vencimento). Não afetado pelo filtro acima.</p>
+        <ResponsiveContainer width="100%" height={280}>
+          <ComposedChart data={evChart}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#EFE3D6" />
+            <XAxis dataKey="label" stroke="#8B5E48" fontSize={12} /><YAxis stroke="#8B5E48" fontSize={12} />
+            <Tooltip contentStyle={tooltipStyle} formatter={(v) => fmtMoney(v)} />
+            <Legend />
+            <Bar dataKey="recebido" name="Recebido" fill="#6B8E5A" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="pago" name="Pago" fill="#B85450" radius={[6, 6, 0, 0]} />
+            <Line type="monotone" dataKey="saldo" name="Saldo" stroke="#3D2817" strokeWidth={2.5} dot={{ r: 4 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+        <div className="overflow-x-auto mt-3"><table className="mm-table text-sm"><thead><tr><th>Mês</th><th className="text-right">Recebido</th><th className="text-right">Pago</th><th className="text-right">Saldo</th><th className="text-right">A Receber</th><th className="text-right">A Pagar</th></tr></thead>
+          <tbody>
+            {evolucao.map((e) => (
+              <tr key={e.mes} data-testid={`evolucao-row-${e.mes}`}>
+                <td className="font-semibold">{MES_LABEL(e.mes)}</td>
+                <td className="text-right text-[#6B8E5A]">{fmtMoney(e.recebido)}</td>
+                <td className="text-right text-[#B85450]">{fmtMoney(e.pago)}</td>
+                <td className={`text-right font-bold ${e.saldo >= 0 ? "text-[#4E7340]" : "text-[#B85450]"}`}>{fmtMoney(e.saldo)}</td>
+                <td className="text-right">{fmtMoney(e.a_receber)}</td>
+                <td className="text-right">{fmtMoney(e.a_pagar)}</td>
+              </tr>
+            ))}
+          </tbody></table></div>
       </div>
 
       {/* BLOCO 4 - VENCIDOS */}
