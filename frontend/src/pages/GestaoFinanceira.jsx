@@ -84,7 +84,7 @@ export default function GestaoFinanceira() {
     ];
     const headers = [
       { label: "Tipo", value: (r) => r.tipo }, { label: "Documento", value: (r) => r.doc },
-      { label: "Cliente/Fornecedor", value: (r) => r.nome }, { label: "Valor", value: (r) => r.valor },
+      { label: "Cliente/Fornecedor", value: (r) => r.nome }, { label: "Valor", value: (r) => Number(Number(r.valor || 0).toFixed(2)) },
       { label: "Vencimento", value: (r) => r.venc }, { label: "Status", value: (r) => r.status },
     ];
     exportCSV(rows, headers, `financeiro-${periodoSlug}.csv`);
@@ -94,6 +94,7 @@ export default function GestaoFinanceira() {
     const linhas = (arr, tipo) => arr.map((r) => `<tr><td>${tipo === "E" ? String(r.numero).padStart(3, "0") : r.codigo}</td><td>${tipo === "E" ? r.cliente : r.fornecedor}</td><td style="text-align:right">${fmtMoney(r.valor)}</td><td style="text-align:right">${fmtDate(r.data_vencimento)}</td><td>${r.status_financeiro}</td></tr>`).join("");
     const fxLinhas = (arr) => arr.length ? arr.map((g) => `<tr><td>${g.grupo}</td><td style="text-align:right">${fmtMoney(g.valor)}</td></tr>`).join("") : `<tr><td colspan="2"><i>Sem lançamentos</i></td></tr>`;
     const w = window.open("", "_blank");
+    if (!w) { toast.error("Permita pop-ups para gerar o PDF"); return; }
     w.document.write(`<html><head><title>Relatório Financeiro</title><style>
       @media print { @page { size: A4 portrait; margin: 12mm; } }
       body { font-family: Georgia, serif; color: #3D2817; padding: 20px; }
