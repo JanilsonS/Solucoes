@@ -1,0 +1,33 @@
+{
+  "summary": "Validated the 3 NEW additions to /financeiro (Gestão Financeira): period filter, Comparativo da Saúde Financeira block, and Excel/PDF export. Backend: 8/8 pytest pass — GET /api/financeiro no-params (regression), GET /api/financeiro?inicio=2026-07-01&fim=2026-07-31 returns only July items including compra CP001 (R$ 250 PAGO venc 10/07/2026) and excludes items with null vencimento, periodo vazio retorna listas vazias, filtro só com 'inicio' funciona, GET /api/financeiro/evolucao?meses=6 returns >=6 monthly rows with keys {mes,recebido,pago,saldo,a_receber,a_pagar}, julho/2026 row has pago=250 & saldo=-250, default meses=6, meses=3 works. Frontend: filter bar renders (filtro-inicio, filtro-fim, filtro-aplicar, filtro-mes-atual, filtro-mes-anterior), filtro-limpar appears only when filter active and resets back to original state; 'Este mês' sets 2026-06-01→06-30 (KPIs all R$0 — sem lançamentos em junho), 'Mês anterior' sets 2026-05-01→05-31, Aplicar manual de 01→31/07/2026 mostra CP001 e KPI Pago=R$250. Bloco 'Comparativo da Saúde Financeira' (data-testid='bloco-evolucao') renderiza com 6 SVGs (gráfico + sparkline icons), 7 linhas evolucao-row-* (Jan/26→Jul/26 — backend inclui mes com dado mesmo fora da janela de 6, ok), evolucao-row-2026-07 mostra Recebido R$0,00 / Pago R$250,00 / Saldo R$-250,00, evolucao-status mostra 'Jul/26: Saldo negativo (R$ -250,00) • ▼ R$ 250,00 vs Jun/26'. Export: fin-export-excel baixou 'financeiro-completo.csv' com colunas Tipo;Documento;Cliente/Fornecedor;Valor;Vencimento;Status. fin-export-pdf abriu nova janela 'Relatório Financeiro' com período, KPIs e tabelas — SEM erro de JS. Regressão: entrada-toggle-7 Aberto→Recebido→Aberto funcionou.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/financeiro — CSV export", "issues": ["Coluna Valor exportada como número bruto com vírgula decimal e precisão alta (ex.: '70,12766462519322'), não como moeda formatada R$ 70,13 nem como número inteiro/2 casas. Recomenda-se arredondar para 2 casas decimais ou usar o valor já formatado (fmtMoney sem o prefixo R$). Hoje fica difícil abrir o CSV no Excel pt-BR sem ajuste."]},
+      {"screen": "/financeiro — Bloco Evolução", "issues": ["Backend retorna meses que tenham dado mesmo fora da janela 'meses=6'. Por isso a tabela mostrou 7 linhas (Jan→Jul/26) e não exatamente 6. O label do bloco diz 'Não afetado pelo filtro acima.' — comportamento correto, mas a contagem pode surpreender quem leu o spec '6 meses fixos'. Considerar limitar via slice(-meses) no backend ou ajustar o texto do header para 'últimos meses com lançamento'."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_financeiro_filtro_evolucao.py",
+    "/app/test_reports/pytest/financeiro_filtro_evolucao.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GestaoFinanceira.jsx exportarExcel (linha ~80): a coluna 'valor' está sendo escrita com o número raw (ex.: 70.12766462519322). Trocar por Number(v).toFixed(2) ou usar fmtMoney sem o 'R$ '. Caso contrário Excel/Sheets pode ler como texto e perder ordenação.",
+    "server.py /api/financeiro/evolucao (linha 1319): meses_lista = sorted(set(ultimos) | set(rec) | set(pag) | set(arec) | set(apag)) acaba retornando >N meses quando há lançamentos fora da janela. Se o requisito é fixar em N, basta retornar apenas 'ultimos' (após sort). Hoje funciona, mas a doc de teste indicava exatamente 6 — o teste agora aceita >=6.",
+    "GestaoFinanceira.jsx loadEvolucao silencia exceções com 'catch { /* noop */ }' — adicionar log/toast em erro ajudará debug em produção.",
+    "exportarPDF abre janela com window.open + document.write sem tratar bloqueio de pop-up. Em navegadores com bloqueador o botão falha silenciosamente. Sugiro verificar 'if (!w) { toast.error('Permita pop-ups para imprimir'); return; }'."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_financeiro_filtro_evolucao.py"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% (all checks)"},
+  "test_credentials": "admin@mm.com / mm123456 (verified)",
+  "seed_data_creation": "Nenhum dado novo criado. Apenas leituras GET e um toggle pedido 007 (Aberto→Recebido→Aberto, revertido ao final).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 8 GREEN. Cobertura nova: (A) filtro por período em /api/financeiro?inicio=&fim= aplica em data_vencimento, exclui null quando filtro ativo, retorna tudo sem params. (B) /api/financeiro/evolucao?meses=N retorna agregados mensais por mês de vencimento; pode retornar >N meses quando há dados em outros meses. (C) Frontend /financeiro tem data-testid filtro-inicio/filtro-fim/filtro-aplicar/filtro-mes-atual/filtro-mes-anterior, filtro-limpar (condicional), bloco-evolucao, evolucao-status, evolucao-row-{YYYY-MM}, fin-export-excel (baixa CSV via expect_download), fin-export-pdf (abre nova janela). Para próxima iteração de polimento, ver design_issues acima (formatação da coluna Valor no CSV e contagem de meses).",
+  "rca of the issue": "Nenhum bug encontrado. Apenas pontos de polimento listados em critical_code_review_comments."
+}
